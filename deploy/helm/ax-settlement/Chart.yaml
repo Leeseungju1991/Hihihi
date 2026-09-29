@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ax-settlement
+description: AX 정산 오케스트레이터 (umbrella chart 의 subchart 로 추가)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,6 @@
+# 회사 Dataform 저장소에 합칠 때는 definitions/ 아래 파일만 복사하고 이 파일은 회사 설정을 따른다.
+defaultProject: PROJECT_ID
+defaultLocation: asia-northeast3
+defaultDataset: ax_settlement_src
+defaultAssertionDataset: ax_settlement_assertions
+dataformCoreVersion: 3.0.0

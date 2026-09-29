@@ -1,0 +1,21 @@
+config {
+  type: "view",
+  description: "정규화 뷰 — 분개장 412(발전매출). 정산월·발전소·조합별 금액.",
+  columns: {
+    entry_id: "분개 행 ID",
+    plant_id: "발전소 ID",
+    month: "정산월 STRING 'YYYY-MM'",
+    partner_id: "조합(거래처) ID",
+    amount: "금액(원, NUMERIC, 공급가액 기준)"
+  },
+  assertions: { uniqueKey: ["entry_id"], nonNull: ["entry_id", "plant_id", "month", "amount"] }
+}
+-- TODO(회사): 412 계정 필터·정산월 컬럼·조합 컬럼 확인 (선행 확인: 분개 기준 테이블 확정)
+SELECT
+  CAST(id AS STRING)                         AS entry_id,
+  CAST(plant_id AS STRING)                   AS plant_id,
+  FORMAT_DATE('%Y-%m', settle_month)         AS month,
+  CAST(partner_id AS STRING)                 AS partner_id,
+  CAST(amount AS NUMERIC)                    AS amount
+FROM ${ref("pv_biz_bal_item")}
+WHERE account_code = '412'

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ax-settlement"
+version = "0.1.0"
+description = "AX 정산 오케스트레이터 — 분개·송장·세금계산서 3자 대조"
+requires-python = ">=3.8"
+dependencies = [
+  "fastapi>=0.100",
+  "pydantic>=1.10,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "httpx>=0.24", "uvicorn>=0.22"]
+bigquery = ["google-cloud-bigquery>=3.10"]
+iap = ["google-auth>=2.20", "requests>=2.28"]
+vertex = ["google-cloud-aiplatform>=1.38"]
+
+[tool.setuptools.packages.find]
+include = ["settlement*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

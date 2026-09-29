@@ -1,0 +1,22 @@
+.mismatch {
+  color: var(--q-negative);
+  font-weight: 600;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+@media print {
+  .no-print,
+  .q-header,
+  .q-drawer {
+    display: none !important;
+  }
+  .q-page-container {
+    padding: 0 !important;
+  }
+  .print-page {
+    padding: 0 !important;
+  }
+}

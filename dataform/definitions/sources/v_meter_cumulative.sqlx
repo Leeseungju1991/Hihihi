@@ -1,0 +1,22 @@
+config {
+  type: "view",
+  description: "정규화 뷰 — 모니터링(RTU) 일자별 누적 발전량 스냅샷. 누락 검침량 보정(실제)의 근거.",
+  columns: {
+    plant_id: "발전소 ID",
+    date: "스냅샷 일자 (그 날 00시 기준 누적값 권장)",
+    cumulative_kwh: "누적 발전량 kWh"
+  },
+  assertions: { uniqueKey: ["plant_id", "date"], nonNull: ["plant_id", "date", "cumulative_kwh"] }
+}
+-- TODO(회사): 선행 확인 — 모니터링 발전량 원천 테이블. 하루 한 점(자정 직후 첫 값)으로 줄인다.
+SELECT plant_id, date, cumulative_kwh
+FROM (
+  SELECT
+    CAST(plant_id AS STRING)            AS plant_id,
+    DATE(ts, 'Asia/Seoul')              AS date,
+    CAST(total_kwh AS NUMERIC)          AS cumulative_kwh,
+    ROW_NUMBER() OVER (PARTITION BY plant_id, DATE(ts, 'Asia/Seoul') ORDER BY ts) AS rn
+  FROM ${ref("TODO_monitoring_meter")}
+  WHERE total_kwh IS NOT NULL
+)
+WHERE rn = 1

@@ -1,0 +1,24 @@
+config {
+  type: "view",
+  description: "정규화 뷰 — 국세청 세금계산서. status 는 VALID | DISABLE 두 값으로 정규화.",
+  columns: {
+    nts_id: "국세청 승인번호",
+    plant_id: "발전소 ID (사업자번호 → 발전소 매핑 필요 시 여기서)",
+    month: "귀속 정산월 'YYYY-MM'",
+    partner_id: "공급받는자 조합 ID",
+    supply_amount: "공급가액(원). 수정(음수) 계산서는 음수",
+    status: "VALID | DISABLE",
+    issue_date: "작성일자"
+  },
+  assertions: { uniqueKey: ["nts_id"], nonNull: ["nts_id", "plant_id", "month", "supply_amount", "status"] }
+}
+-- TODO(회사): disable 판정 컬럼, 발전소 매핑 방식(사업자번호/품목) 확인
+SELECT
+  CAST(approval_no AS STRING)                         AS nts_id,
+  CAST(plant_id AS STRING)                            AS plant_id,
+  FORMAT_DATE('%Y-%m', settle_month)                  AS month,
+  CAST(buyer_partner_id AS STRING)                    AS partner_id,
+  CAST(supply_amount AS NUMERIC)                      AS supply_amount,
+  IF(is_disabled, 'DISABLE', 'VALID')                 AS status,
+  DATE(issue_date)                                    AS issue_date
+FROM ${ref("stg_nts_tax_invoice")}

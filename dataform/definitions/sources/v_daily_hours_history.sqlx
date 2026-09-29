@@ -1,0 +1,17 @@
+config {
+  type: "view",
+  description: "정규화 뷰 — 과거 정산월 발전소별 일 평균 발전시간. 발전시간 99퍼센타일 상한의 모집단.",
+  columns: {
+    month: "정산월 'YYYY-MM'",
+    plant_id: "발전소 ID",
+    daily_hours: "송장 검침량 ÷ 설비용량 ÷ 월 일수"
+  }
+}
+SELECT
+  i.month,
+  i.plant_id,
+  SAFE_DIVIDE(SUM(i.meter_kwh), ANY_VALUE(p.capacity_kw))
+    / EXTRACT(DAY FROM LAST_DAY(PARSE_DATE('%Y-%m', i.month))) AS daily_hours
+FROM ${ref("v_sales_invoice")} i
+JOIN ${ref("v_plant")} p USING (plant_id)
+GROUP BY i.month, i.plant_id

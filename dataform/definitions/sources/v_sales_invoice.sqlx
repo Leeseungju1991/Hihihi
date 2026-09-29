@@ -1,0 +1,22 @@
+config {
+  type: "view",
+  description: "정규화 뷰 — 송장. 검침발전량(kWh)의 기준.",
+  columns: {
+    invoice_id: "송장 ID",
+    plant_id: "발전소 ID",
+    month: "정산월 'YYYY-MM'",
+    partner_id: "조합(거래처) ID",
+    meter_kwh: "검침발전량 kWh (NUMERIC)",
+    amount: "송장 금액(원)"
+  },
+  assertions: { uniqueKey: ["invoice_id"], nonNull: ["invoice_id", "plant_id", "month", "meter_kwh"] }
+}
+-- TODO(회사): 취소 송장 제외 조건 확인
+SELECT
+  CAST(id AS STRING)                   AS invoice_id,
+  CAST(plant_id AS STRING)             AS plant_id,
+  FORMAT_DATE('%Y-%m', settle_month)   AS month,
+  CAST(partner_id AS STRING)           AS partner_id,
+  CAST(meter_kwh AS NUMERIC)           AS meter_kwh,
+  CAST(amount AS NUMERIC)              AS amount
+FROM ${ref("pv_sales_invoice")}

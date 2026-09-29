@@ -1,0 +1,20 @@
+config {
+  type: "view",
+  description: "정규화 뷰 — 발전소 마스터. 앱은 이 컬럼 계약만 안다.",
+  columns: {
+    plant_id: "발전소 ID (모든 원천의 조인 키)",
+    name: "발전소명",
+    capacity_kw: "설비용량 kW (NUMERIC) — 일 발전시간 계산",
+    region: "지역 — 인근 발전소 추정 보정의 그룹 키",
+    partner_id: "현재 조합(거래처) ID"
+  },
+  assertions: { uniqueKey: ["plant_id"], nonNull: ["plant_id", "capacity_kw"] }
+}
+-- TODO(회사): 실제 컬럼명으로 매핑
+SELECT
+  CAST(plant_id AS STRING)      AS plant_id,
+  CAST(plant_name AS STRING)    AS name,
+  CAST(capacity_kw AS NUMERIC)  AS capacity_kw,
+  CAST(region AS STRING)        AS region,
+  CAST(partner_id AS STRING)    AS partner_id
+FROM ${ref("TODO_plant_master")}

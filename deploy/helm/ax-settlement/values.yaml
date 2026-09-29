@@ -1,0 +1,18 @@
+# 회사 umbrella chart 의 values 규칙에 맞춰 키를 옮긴다 (INTEGRATION.md §5)
+api:
+  image: asia-northeast3-docker.pkg.dev/PROJECT_ID/REPO/ax-settlement-api:0.1.0
+  replicas: 1
+  serviceAccountName: ax-settlement   # Workload Identity → BigQuery dataViewer(원천) + dataEditor(ax_settlement)
+  env:
+    AX_BACKEND: bigquery
+    AX_BQ_PROJECT: PROJECT_ID
+    AX_BQ_SRC_DATASET: ax_settlement_src
+    AX_BQ_APP_DATASET: ax_settlement
+    AX_BQ_LOCATION: asia-northeast3
+    AX_IAP_AUDIENCE: ""               # /projects/NUM/global/backendServices/ID
+    AX_APPROVERS: ""                  # 확정 권한자 이메일, 쉼표 구분
+    AX_LLM: ""                        # vertex 로 설정 시 Vertex AI 사용
+    AX_LLM_MODEL: ""
+web:
+  image: asia-northeast3-docker.pkg.dev/PROJECT_ID/REPO/ax-settlement-web:0.1.0
+  replicas: 1

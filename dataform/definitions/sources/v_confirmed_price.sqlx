@@ -1,0 +1,16 @@
+config {
+  type: "view",
+  description: "정규화 뷰 — 확정 단가(원/kWh). plant_id NULL = 해당 월 공통 단가, 값이 있으면 발전소별(PPA 등) 단가.",
+  columns: {
+    month: "정산월 'YYYY-MM'",
+    plant_id: "발전소 ID 또는 NULL",
+    unit_price: "확정 단가 원/kWh (NUMERIC)"
+  },
+  assertions: { nonNull: ["month", "unit_price"] }
+}
+-- TODO(회사): 한전 확정 SMP 원천, 발전소별 계약단가(고정가/PPA) 원천 확인
+SELECT
+  FORMAT_DATE('%Y-%m', settle_month)  AS month,
+  CAST(NULL AS STRING)                AS plant_id,
+  CAST(smp AS NUMERIC)                AS unit_price
+FROM ${ref("TODO_kpx_confirmed_smp")}
