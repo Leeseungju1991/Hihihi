@@ -5,6 +5,7 @@ import type {
   AutomationPreview,
   ErrorCase,
   ExceptionInput,
+  FinalizeCheck,
   Hold,
   Meta,
   MonthStatus,
@@ -94,6 +95,8 @@ export const api = {
     request<ErrorCase>('POST', '/error-cases', body),
 
   // 확정·리포트
+  finalizeCheck: (month: string) =>
+    request<FinalizeCheck>('GET', `${m(month)}/finalize/check`),
   finalize: (month: string, acknowledge: boolean, note = '') =>
     request<Approval>('POST', `${m(month)}/finalize`, { acknowledge, note }),
   report: (month: string, kind: 'monthly' | 'unresolved' = 'monthly') =>

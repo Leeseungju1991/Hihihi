@@ -1,6 +1,6 @@
 config {
   type: "view",
-  description: "정규화 뷰 — 확정 단가(원/kWh). plant_id NULL = 해당 월 공통 단가, 값이 있으면 발전소별(PPA 등) 단가.",
+  description: "[미검증 · 회사 연결 예정] 정규화 뷰 — 확정 단가(원/kWh). plant_id NULL = 해당 월 공통 단가, 값이 있으면 발전소별(PPA 등) 단가.",
   columns: {
     month: "정산월 'YYYY-MM'",
     plant_id: "발전소 ID 또는 NULL",

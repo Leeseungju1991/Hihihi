@@ -48,8 +48,8 @@
           :error="!!errors.note"
           :error-message="errors.note"
         />
-        <div v-if="editing" class="text-caption text-grey-7">
-          상태 {{ statusLabel }} · v{{ editing.version }} · {{ editing.updated_by }}
+        <div v-if="editing" class="text-caption text-muted">
+          상태 {{ statusLabel }} · v{{ editing.version }} · {{ who(editing.updated_by) }}
         </div>
       </q-card-section>
       <q-card-actions align="right">
@@ -66,6 +66,7 @@ import { useDialogPluginComponent, useQuasar } from 'quasar';
 import { api, ApiError } from '../api/client';
 import type { ExceptionInput, ExceptionType, SettlementException } from '../api/types';
 import { useSettlementStore } from '../stores/settlement';
+import { who } from '../utils/format';
 
 const props = defineProps<{
   editing?: SettlementException | null;

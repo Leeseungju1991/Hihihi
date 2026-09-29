@@ -53,7 +53,7 @@ def validate_exception(exc: SettlementException, known_plants=None) -> None:
             errors["partner_after"] = "변경 전·후 조합이 같습니다"
 
     if exc.type == ExceptionType.MANUAL_ISSUE and exc.manual_kwh is not None:
-        if exc.manual_kwh <= Decimal("0"):
+        if not exc.manual_kwh.is_finite() or exc.manual_kwh <= Decimal("0"):
             errors["manual_kwh"] = "0보다 커야 합니다"
 
     if errors:

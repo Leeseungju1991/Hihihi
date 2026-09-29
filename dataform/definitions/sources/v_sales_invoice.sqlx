@@ -1,6 +1,6 @@
 config {
   type: "view",
-  description: "정규화 뷰 — 송장. 검침발전량(kWh)의 기준.",
+  description: "[미검증 · 회사 연결 예정] 정규화 뷰 — 송장. 검침발전량(kWh)의 기준.",
   columns: {
     invoice_id: "송장 ID",
     plant_id: "발전소 ID",

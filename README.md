@@ -8,6 +8,8 @@
 - 규칙 엔진이 판정하고, LLM은 실패 원인·요약 **설명만** 합니다(근거 숫자 가드 적용).
 - 최종 확정은 항상 담당자 승인으로 하며, 확정한 정산월은 잠깁니다.
 
+> ⚠️ 프리즘/BigQuery 조회 · IAP · LLM 연동은 **기능만 구현, 미검증** 상태입니다 → [UNVERIFIED.md](UNVERIFIED.md)
+
 회사 환경(FastAPI · Quasar · BigQuery · Dataform · GKE/Cloud Run · IAP)에 합치는 방법은 **[INTEGRATION.md](INTEGRATION.md)**를 보세요.
 
 ## 흐름
@@ -42,7 +44,13 @@ AX_DEV_USER=dev@local AX_APPROVERS=dev@local .venv/bin/uvicorn settlement.api.ap
 cd frontend
 npm install
 npm run dev
+
+# 점검
+npm run typecheck && npm test   # 타입 검사 + 단위 테스트
+npm run e2e                     # ①~⑤ 전 흐름 E2E (라이트·다크)
 ```
+
+화면: Pretendard 폰트, 상단 단계 표시(진행중·완료·대기), 라이트/다크 전환(우측 상단), 절제된 전환 애니메이션
 
 ## 가상 시나리오 (`backend/settlement/fixtures.py`)
 

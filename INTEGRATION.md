@@ -1,5 +1,7 @@
 # 회사 코드 합치기 가이드
 
+> **프리즘/BigQuery 조회 · IAP · LLM 연동은 기능만 구현했고 검증하지 않았습니다.** 연결 순서와 대상 파일은 [UNVERIFIED.md](UNVERIFIED.md)를 보세요.
+
 이 레포는 회사 인프라 없이 만들 수 있는 부분(규칙 엔진·워크플로·API·화면·DDL)을 끝내 둔 상태입니다.
 회사에서는 **아래 체크리스트의 `TODO(회사)`만 채우면** 됩니다. 로직은 수정하지 않아도 됩니다.
 
@@ -72,16 +74,18 @@ sed 's/PROJECT_ID/<프로젝트>/g' backend/sql/ddl/001_app_tables.sql | bq quer
 
 ```
 src/api/{client,types}.ts
-src/components/*
+src/components/*            (StepNav: 상단 단계 진행 표시)
+src/composables/useTheme.ts (라이트/다크 전환, localStorage 저장)
 src/layouts/SettlementLayout.vue
 src/pages/{Load,Exceptions,Reconcile,Review,Report}Page.vue
 src/stores/settlement.ts
-src/utils/format.ts
-src/css/app.css 의 .mismatch/.num/@media print 규칙
+src/utils/{format,steps}.ts
+src/css/app.css            (색상 토큰·타이포·애니메이션·인쇄 — 회사 전역 CSS와 겹치면 토큰만 가져감)
 ```
 
 1. `src/router/routes.ts`의 `settlementRoutes` 배열을 회사 routes에 추가합니다. 회사 메인 레이아웃 안에 넣으려면 `SettlementLayout`을 회사 레이아웃의 child로 둡니다.
-2. `quasar.config`의 `framework.plugins`에 `Dialog`, `Notify`, `Loading`을 추가합니다.
+2. `quasar.config`의 `framework.plugins`에 `Dialog`, `Notify`, `Loading`을 추가합니다. 다크 모드를 쓰려면 `framework.config.dark: 'auto'`도 설정합니다.
+   - 폰트: `npm i pretendard`. `App.vue`에서 `pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css`를 import하면 CDN 없이 번들됩니다. 회사 공통 폰트가 있으면 이 import는 생략합니다.
 3. 회사가 axios boot(`api` 인스턴스)를 쓰면 `src/api/client.ts`의 `request()` 함수 하나만 axios로 바꿉니다.
 4. Pinia가 없으면 `stores/index.ts`를 추가합니다.
 5. PDF는 브라우저 인쇄로 처리합니다(`window.print`, 인쇄 CSS 포함). 서버 PDF가 필요하면 `/report` JSON을 그대로 렌더링하면 됩니다.

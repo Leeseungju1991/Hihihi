@@ -1,3 +1,4 @@
+// [미검증 · 회사 연결 예정] Dataform 미컴파일. UNVERIFIED.md §1
 // 운영 원천 테이블 선언 (읽기 전용). schema/name 은 회사 실제 위치로 바꾼다.
 // TODO(회사): 데이터셋명 확인
 const OPS = "ops_dataset_TODO";

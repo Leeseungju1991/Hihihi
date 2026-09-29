@@ -26,7 +26,7 @@
       />
     </div>
 
-    <div v-if="!store.run" class="text-grey-7 q-pa-lg text-center">③ 3자 대조를 먼저 실행하세요.</div>
+    <div v-if="!store.run" class="text-muted q-pa-lg text-center">③ 3자 대조를 먼저 실행하세요.</div>
 
     <ResultTable v-else :rows="rows" @open="act.openDetail">
       <template v-if="!store.locked" #actions="{ row }">
@@ -35,11 +35,11 @@
           <q-btn dense flat size="sm" icon="report" color="negative" @click="act.addErrorCase(row)"><q-tooltip>에러 케이스 추가</q-tooltip></q-btn>
           <q-btn dense flat size="sm" icon="refresh" color="primary" @click="act.recheck(row)"><q-tooltip>재검증</q-tooltip></q-btn>
           <q-btn v-if="row.category === 'HOLD'" dense flat size="sm" icon="undo" @click="act.release(row)"><q-tooltip>보류 해제 · 재검증</q-tooltip></q-btn>
-          <q-btn v-else dense flat size="sm" icon="pause_circle" color="grey-8" @click="act.hold(row)"><q-tooltip>보류</q-tooltip></q-btn>
+          <q-btn v-else dense flat size="sm" icon="pause_circle" @click="act.hold(row)"><q-tooltip>보류</q-tooltip></q-btn>
         </div>
       </template>
     </ResultTable>
-    <div class="text-caption text-grey-7 q-mt-sm">행을 누르면 원천값 · 근거 · 실패 원인 · 추천 조치 · 재검증 이력을 봅니다.</div>
+    <div class="text-caption text-muted q-mt-sm">행을 누르면 원천값 · 근거 · 실패 원인 · 추천 조치 · 재검증 이력을 봅니다.</div>
   </q-page>
 </template>
 

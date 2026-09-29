@@ -3,6 +3,10 @@
 발전매출 확정 정산에서 분개(412)·송장·세금계산서를 발전소 단위로 3자 대조하고, 예외·보정으로 해소한 뒤 담당자가 확정한다.
 회사 통합 작업은 `INTEGRATION.md`를 따른다.
 
+## 미검증 연동
+프리즘/BigQuery 조회(`adapters/bigquery.py`, `dataform/`), IAP(`api/auth.py`), LLM(`llm/vertex.py`)은 **기능만 구현하고 검증하지 않았다.**
+코드에 `[미검증 · 회사 연결 예정]`으로 표기되어 있다. 연결과 검증은 `UNVERIFIED.md` 순서를 따른다.
+
 ## 불변 규칙 (변경 금지)
 - **운영 원천은 읽기 전용.** `SourceRepository`에는 쓰기 메서드가 없다. 쓰기는 `ax_settlement` 데이터셋에만 한다.
 - **금액은 보정하지 않는다.** 보정(`Adjustment`)은 kWh만 바꾼다. 분개·세금계산서 금액은 원천 그대로 쓴다.
@@ -35,7 +39,9 @@ AX_DEV_USER=dev@local AX_APPROVERS=dev@local .venv/bin/uvicorn settlement.api.ap
 
 # 프론트
 cd frontend && npm install && npm run dev        # :9000, /api → :8000 프록시
-npm run typecheck && npm run build
+npm run typecheck && npm test && npm run build
+npm run e2e                                      # Playwright: ①~⑤ 전 흐름 × 라이트/다크 (백엔드 venv 필요)
+#   브라우저가 없으면 npx playwright install chromium, 또는 PW_CHROMIUM=<chrome 경로>
 ```
 
 ## 코드 규칙
@@ -43,4 +49,7 @@ npm run typecheck && npm run build
 - API 요청 스키마는 pydantic v1/v2 공용 문법만 쓴다(validator 금지). 검증은 `domain/validation.py`에 둔다.
 - 금액·kWh는 `Decimal`로 다루고, JSON에서는 문자열로 보낸다(`api/serialize.py`). float를 쓰지 않는다.
 - 응답 필드를 바꾸면 `frontend/src/api/types.ts`도 함께 바꾼다.
+- 화면 색상은 `src/css/app.css`의 토큰(`--app-*`, `.text-muted`, `.callout*`)만 쓴다. `bg-white`·`text-grey-7` 같은 고정색은 다크 모드를 깨뜨린다.
+- 애니메이션은 절제한다: 페이지 전환 160ms, 카드 hover, 진행중 점 정도. `prefers-reduced-motion`을 지킨다.
+- 화면에 이메일 전체를 표시하지 않는다. 처리자는 `who()`로 계정명만 표시한다(원본은 이력에 저장).
 - 새 규칙을 추가하면 `fixtures.py`에 시나리오를 추가하고 `tests/test_engine.py`에 기대 분류를 적는다.

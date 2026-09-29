@@ -2,10 +2,10 @@
   <q-page padding>
     <div class="row items-center q-mb-sm">
       <div class="text-h6 col">② 예외 관리</div>
-      <q-badge v-if="store.locked" color="grey-8" class="q-pa-sm q-mr-sm"><q-icon name="lock" class="q-mr-xs" />확정월 — 수정 잠금</q-badge>
+      <q-badge v-if="store.locked" color="blue-grey-7" class="q-pa-sm q-mr-sm"><q-icon name="lock" class="q-mr-xs" />확정월 — 수정 잠금</q-badge>
     </div>
 
-    <q-tabs v-model="tab" dense align="left" class="text-grey-8 q-mb-md" active-color="primary" indicator-color="primary">
+    <q-tabs v-model="tab" dense align="left" class="text-muted q-mb-md" active-color="primary" indicator-color="primary">
       <q-tab name="exceptions" label="예외" />
       <q-tab name="errors" label="에러 케이스" />
     </q-tabs>
@@ -44,7 +44,7 @@
             </q-td>
           </template>
           <template #body-cell-audit="p">
-            <q-td :props="p" class="text-caption">v{{ p.row.version }} · {{ p.row.updated_by }}<br />{{ dateTime(p.row.updated_at) }}</q-td>
+            <q-td :props="p" class="text-caption">v{{ p.row.version }} · {{ who(p.row.updated_by) }}<br />{{ dateTime(p.row.updated_at) }}</q-td>
           </template>
           <template #body-cell-actions="p">
             <q-td :props="p" class="text-no-wrap">
@@ -92,7 +92,7 @@
               <td>{{ h.partner_before }}{{ h.partner_before ? ' → ' : '' }}{{ h.partner_after }}</td>
               <td class="num">{{ h.manual_kwh ?? '-' }}</td>
               <td>{{ h.note }}</td>
-              <td>{{ h.updated_by }}</td>
+              <td>{{ who(h.updated_by) }}</td>
               <td class="text-no-wrap">{{ dateTime(h.updated_at) }}</td>
             </tr>
           </tbody>
@@ -110,7 +110,7 @@ import type { ErrorCase, ExceptionStatus, ExceptionType, SettlementException } f
 import ErrorCaseDialog from '../components/ErrorCaseDialog.vue';
 import ExceptionFormDialog from '../components/ExceptionFormDialog.vue';
 import { useSettlementStore } from '../stores/settlement';
-import { dateTime, kwh } from '../utils/format';
+import { dateTime, kwh, who } from '../utils/format';
 
 const $q = useQuasar();
 const store = useSettlementStore();
@@ -153,7 +153,7 @@ const errorColumns: QTableColumn<ErrorCase>[] = [
   { name: 'month', label: '정산월', field: 'month', align: 'left' },
   { name: 'plant', label: '발전소', field: 'plant_id', align: 'left' },
   { name: 'symptom', label: '증상', field: 'symptom', align: 'left', style: 'white-space: normal' },
-  { name: 'by', label: '등록자', field: 'created_by', align: 'left' },
+  { name: 'by', label: '등록자', field: 'created_by', align: 'left', format: (v: string) => who(v) },
 ];
 
 async function reload() {

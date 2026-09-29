@@ -13,7 +13,7 @@
     <template #body-cell-plant="p">
       <q-td :props="p">
         <div class="text-weight-medium">{{ p.row.plant_name }}</div>
-        <div class="text-caption text-grey-7">{{ p.row.plant_id }}</div>
+        <div class="text-caption text-muted">{{ p.row.plant_id }}</div>
       </q-td>
     </template>
     <template #body-cell-journal="p">

@@ -2,8 +2,8 @@
   <q-page padding>
     <div class="row items-center q-mb-md q-gutter-sm">
       <div class="text-h6 col">③ 3자 대조</div>
-      <div v-if="store.run" class="text-caption text-grey-7">
-        {{ dateTime(store.run.created_at) }} · {{ store.run.created_by }}
+      <div v-if="store.run" class="text-caption text-muted">
+        최근 대조 {{ dateTime(store.run.created_at) }}
       </div>
       <q-btn color="primary" unelevated icon="compare_arrows" label="3자 대조" :loading="running" :disable="store.locked" @click="reconcile" />
       <q-btn
@@ -17,7 +17,7 @@
       />
     </div>
 
-    <div v-if="!store.run" class="text-grey-7 q-pa-lg text-center">
+    <div v-if="!store.run" class="text-muted q-pa-lg text-center">
       [3자 대조]를 눌러 분개 · 송장 · 세금계산서를 발전소 단위로 대조합니다.
     </div>
 
@@ -28,20 +28,23 @@
           <q-card
             flat
             bordered
-            class="cursor-pointer"
+            class="cursor-pointer hover-lift"
             :class="selected === c ? `bg-${CATEGORY_COLOR[c]} text-white` : ''"
+            role="button"
+            :aria-pressed="selected === c"
             @click="selected = c"
           >
             <q-card-section class="q-py-sm">
               <div class="text-caption">{{ store.categoryLabel(c) }}</div>
               <div class="text-h5 text-weight-bold">{{ counts[c] }}</div>
-              <div class="text-caption" :class="selected === c ? '' : 'text-grey-7'">{{ HINT[c] }}</div>
+              <div class="text-caption" :class="selected === c ? 'text-white' : 'text-muted'" :style="selected === c ? 'opacity: .85' : ''">{{ HINT[c] }}</div>
             </q-card-section>
           </q-card>
         </div>
       </div>
 
       <!-- 자동화 결과 -->
+      <transition name="fade-up" appear>
       <q-card v-if="executed.length" flat bordered class="q-mb-md">
         <q-card-section class="text-subtitle1">자동화 결과 · 자동 재검증</q-card-section>
         <q-markup-table flat dense separator="horizontal">
@@ -63,16 +66,17 @@
               </td>
               <td style="white-space: normal; max-width: 420px">{{ x.rc.cause || '-' }}</td>
               <td class="text-no-wrap">
-                <template v-if="!x.rc.passed && resultOf(x.rc.plant_id)">
+                <template v-if="!x.rc.passed && !store.locked && resultOf(x.rc.plant_id)">
                   <q-btn dense flat size="sm" label="예외 등록" @click="act.registerException(resultOf(x.rc.plant_id)!)" />
                   <q-btn dense flat size="sm" color="primary" label="재검증" @click="recheckRow(x.rc.plant_id)" />
-                  <q-btn dense flat size="sm" color="grey-8" label="보류" @click="act.hold(resultOf(x.rc.plant_id)!)" />
+                  <q-btn dense flat size="sm" label="보류" @click="act.hold(resultOf(x.rc.plant_id)!)" />
                 </template>
               </td>
             </tr>
           </tbody>
         </q-markup-table>
       </q-card>
+      </transition>
 
       <!-- 목록 -->
       <ResultTable :rows="store.byCategory(selected)" @open="act.openDetail" />

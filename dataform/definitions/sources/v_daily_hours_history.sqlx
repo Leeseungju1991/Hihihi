@@ -1,6 +1,6 @@
 config {
   type: "view",
-  description: "정규화 뷰 — 과거 정산월 발전소별 일 평균 발전시간. 발전시간 99퍼센타일 상한의 모집단.",
+  description: "[미검증 · 회사 연결 예정] 정규화 뷰 — 과거 정산월 발전소별 일 평균 발전시간. 발전시간 99퍼센타일 상한의 모집단.",
   columns: {
     month: "정산월 'YYYY-MM'",
     plant_id: "발전소 ID",

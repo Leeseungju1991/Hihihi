@@ -92,6 +92,10 @@ class SettlementService:
     def is_locked(self, month: str) -> bool:
         return self.repos.approvals.get(month) is not None
 
+    def _ensure_known_plant(self, plant_id: str) -> None:
+        if plant_id not in self.repos.source.plants():
+            raise ValidationError({"plant_id": "발전소 마스터에 없는 발전소입니다"})
+
     def _ensure_unlocked(self, month: str) -> None:
         if self.is_locked(month):
             raise MonthLockedError("{} 정산월은 확정되어 수정할 수 없습니다".format(month))
@@ -123,6 +127,7 @@ class SettlementService:
     # ─────────── ③ 3자 대조 ───────────
     def run(self, month: str, actor: str) -> ReconcileRun:
         validate_month(month)
+        self._ensure_unlocked(month)  # 확정 후 재대조로 확정 결과가 바뀌지 않게
         bundle = self.repos.source.load(month)
         run = ReconcileRun(
             run_id=uuid.uuid4().hex[:12],
@@ -229,6 +234,7 @@ class SettlementService:
     def recheck(
         self, month: str, plant_id: str, actor: str, trigger: str = "MANUAL", tried_signature: str = ""
     ) -> RecheckRecord:
+        self._ensure_unlocked(month)
         results = self._reconcile(month, only={plant_id})
         if not results:
             raise NotFoundError("{} {} 대조 대상 아님".format(month, plant_id))
@@ -276,6 +282,7 @@ class SettlementService:
         self._ensure_unlocked(month)
         if not reason or not reason.strip():
             raise ValidationError({"reason": "보류 사유는 필수입니다"})
+        self._ensure_known_plant(plant_id)
         h = Hold(month=month, plant_id=plant_id, reason=reason.strip(), actor=actor, at=self.clock())
         self.repos.holds.save(h)
         self._refresh(month, plant_id)
@@ -354,6 +361,7 @@ class SettlementService:
         if not case.symptom.strip():
             raise ValidationError({"symptom": "증상은 필수입니다"})
         validate_month(case.month)
+        self._ensure_known_plant(case.plant_id)
         existing = self.repos.error_cases.list()
         case.case_no = case.case_no or "ERR-{:04d}".format(len(existing) + 1)
         case.created_by = actor
@@ -361,8 +369,8 @@ class SettlementService:
         return case
 
     # ─────────── 최종 확정 ───────────
-    def finalize(self, month: str, actor: str, acknowledge: bool = False, note: str = "") -> Approval:
-        self._ensure_unlocked(month)
+    def finalize_check(self, month: str) -> Dict[str, List[str]]:
+        """확정 전 사전 점검 — 화면이 경고창을 먼저 띄울 수 있게 한다."""
         run = self.latest_run(month)
         open_holds = [h.plant_id for h in self.repos.holds.list(month) if not h.released]
         unresolved = [
@@ -375,9 +383,14 @@ class SettlementService:
             warnings.append("보류 {}건이 남아 있습니다".format(len(open_holds)))
         if unresolved:
             warnings.append("미해결(자동화·확인·에러) {}건이 남아 있습니다".format(len(unresolved)))
-        if warnings and not acknowledge:
-            raise ConfirmationRequired(warnings, open_holds, unresolved)
-        approval = Approval(month=month, actor=actor, at=self.clock(), open_holds=open_holds, note=note)
+        return {"warnings": warnings, "open_holds": open_holds, "unresolved": unresolved}
+
+    def finalize(self, month: str, actor: str, acknowledge: bool = False, note: str = "") -> Approval:
+        self._ensure_unlocked(month)
+        check = self.finalize_check(month)
+        if check["warnings"] and not acknowledge:
+            raise ConfirmationRequired(check["warnings"], check["open_holds"], check["unresolved"])
+        approval = Approval(month=month, actor=actor, at=self.clock(), open_holds=check["open_holds"], note=note)
         self.repos.approvals.add(approval)
         return approval
 

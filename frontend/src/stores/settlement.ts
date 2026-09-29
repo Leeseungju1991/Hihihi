@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { api, ApiError } from '../api/client';
 import type { Category, Meta, MonthStatus, PlantResult, ReconcileRun } from '../api/types';
 import { defaultMonth } from '../utils/format';
+import type { StepFacts } from '../utils/steps';
 
 interface State {
   month: string;
@@ -27,6 +28,16 @@ export const useSettlementStore = defineStore('settlement', {
       (c: Category): PlantResult[] =>
         s.run?.results.filter((r) => r.category === c) ?? [],
     categoryLabel: (s) => (c: Category) => s.meta?.categories[c] ?? c,
+    stepFacts: (s): StepFacts => {
+      const c = s.run?.category_counts;
+      return {
+        loaded: s.counts !== null,
+        hasRun: s.run !== null,
+        automatable: c?.AUTOMATABLE ?? 0,
+        unresolved: (c?.REVIEW ?? 0) + (c?.ERROR ?? 0),
+        locked: s.status?.locked ?? false,
+      };
+    },
   },
 
   actions: {

@@ -198,6 +198,13 @@ export interface MonthStatus {
   category_counts: Record<Category, number> | null;
 }
 
+export interface FinalizeCheck {
+  locked: boolean;
+  warnings: string[];
+  open_holds: string[];
+  unresolved: string[];
+}
+
 export interface FinalizeWarning {
   detail: string;
   warnings: string[];

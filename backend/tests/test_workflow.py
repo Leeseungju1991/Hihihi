@@ -178,3 +178,31 @@ def test_exception_history_and_close(svc):
 def test_error_case_numbering(svc):
     c = svc.add_error_case(ErrorCase("", dt.date(2026, 9, 2), MONTH, "P011", "송장 미수집"), "tech@corp")
     assert c.case_no == "ERR-0001" and c.created_by == "tech@corp"
+
+
+def test_locked_month_blocks_rerun_and_recheck(svc):
+    run = svc.run(MONTH, "fin@corp")
+    svc.finalize(MONTH, "boss@corp", acknowledge=True)
+    with pytest.raises(MonthLockedError):
+        svc.run(MONTH, "fin@corp")
+    with pytest.raises(MonthLockedError):
+        svc.recheck(MONTH, "P009", "fin@corp")
+    with pytest.raises(MonthLockedError):
+        svc.execute_automation(run.run_id, "fin@corp")
+
+
+def test_unknown_plant_rejected_for_hold_and_error_case(svc):
+    svc.run(MONTH, "fin@corp")
+    with pytest.raises(ValidationError):
+        svc.hold(MONTH, "NOPE", "사유", "fin@corp")
+    with pytest.raises(ValidationError):
+        svc.add_error_case(ErrorCase("", dt.date(2026, 9, 1), MONTH, "NOPE", "증상"), "fin@corp")
+
+
+def test_manual_kwh_must_be_finite(svc):
+    with pytest.raises(ValidationError) as ei:
+        svc.create_exception(
+            SettlementException("", MONTH, "P001", ExceptionType.MANUAL_ISSUE, manual_kwh=D("NaN"), partner_after="C"),
+            "fin@corp",
+        )
+    assert "manual_kwh" in ei.value.errors

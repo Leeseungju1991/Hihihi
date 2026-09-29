@@ -21,6 +21,7 @@ import datetime as dt
 from decimal import Decimal as D
 from typing import Dict, List
 
+from .engine.numbers import month_start, next_month_start
 from .domain.models import (
     ConfirmedPrice,
     ExceptionType,
@@ -43,7 +44,8 @@ def _amt(kwh: int) -> D:
     return (D(kwh) * PRICE).quantize(D("1"))
 
 
-def demo_bundle() -> SourceBundle:
+def demo_bundle(month: str = MONTH) -> SourceBundle:
+    """같은 시나리오를 다른 정산월로 만들 수 있다 (31일 달이면 기대값 동일)."""
     plants: Dict[str, Plant] = {}
     journals: List[JournalEntry] = []
     invoices: List[SalesInvoice] = []
@@ -55,15 +57,15 @@ def demo_bundle() -> SourceBundle:
 
     def jnl(pid: str, amount: D, partner: str = "C-SOLAR1") -> None:
         seq["j"] += 1
-        journals.append(JournalEntry("J{:04d}".format(seq["j"]), pid, MONTH, partner, amount))
+        journals.append(JournalEntry("J{:04d}".format(seq["j"]), pid, month, partner, amount))
 
     def inv(pid: str, kwh: int, partner: str = "C-SOLAR1") -> None:
         seq["i"] += 1
-        invoices.append(SalesInvoice("I{:04d}".format(seq["i"]), pid, MONTH, partner, D(kwh), _amt(kwh), InvoiceSource.SYSTEM))
+        invoices.append(SalesInvoice("I{:04d}".format(seq["i"]), pid, month, partner, D(kwh), _amt(kwh), InvoiceSource.SYSTEM))
 
     def tax(pid: str, amount: D, partner: str = "C-SOLAR1", status: TaxInvoiceStatus = TaxInvoiceStatus.VALID) -> None:
         seq["t"] += 1
-        taxes.append(TaxInvoice("NTS{:04d}".format(seq["t"]), pid, MONTH, partner, amount, status, dt.date(2026, 9, 10)))
+        taxes.append(TaxInvoice("NTS{:04d}".format(seq["t"]), pid, month, partner, amount, status, next_month_start(month) + dt.timedelta(days=9)))
 
     def normal(pid: str, kwh: int) -> None:
         jnl(pid, _amt(kwh))
@@ -135,26 +137,27 @@ def demo_bundle() -> SourceBundle:
     tax("P012", _amt(10850))
 
     readings = [
-        MeterReading("P004", dt.date(2026, 8, 1), D("500000")),
-        MeterReading("P004", dt.date(2026, 9, 1), D("510850")),
+        MeterReading("P004", month_start(month), D("500000")),
+        MeterReading("P004", next_month_start(month), D("510850")),
     ]
 
     return SourceBundle(
-        month=MONTH,
+        month=month,
         plants=plants,
         journals=journals,
         invoices=invoices,
         tax_invoices=taxes,
-        prices=[ConfirmedPrice(MONTH, PRICE)],
+        prices=[ConfirmedPrice(month, PRICE)],
         meter_readings=readings,
     )
 
 
-def demo_exceptions() -> List[SettlementException]:
+def demo_exceptions(month: str = MONTH) -> List[SettlementException]:
+    prefix = "EX-" if month == MONTH else "EX-{}-".format(month.replace("-", ""))
     return [
         SettlementException(
-            exception_id="EX-0001",
-            month=MONTH,
+            exception_id=prefix + "0001",
+            month=month,
             plant_id="P005",
             type=ExceptionType.MANUAL_ISSUE,
             manual_kwh=D("2850"),
@@ -162,11 +165,11 @@ def demo_exceptions() -> List[SettlementException]:
             note="8월분 수기 발행 (홈택스 직접 발행)",
         ),
         SettlementException(
-            exception_id="EX-0002",
-            month=MONTH,
+            exception_id=prefix + "0002",
+            month=month,
             plant_id="P006",
             type=ExceptionType.TRANSFER,
-            base_date=dt.date(2026, 8, 11),
+            base_date=month_start(month) + dt.timedelta(days=10),
             partner_before="C-SOLAR1",
             partner_after="C-SOLAR2",
             note="양수도 계약 8/11 발효",

@@ -65,3 +65,10 @@ export function mismatch(a: string | null, b: string | null, tolerance = 10): bo
   if (x === null || y === null) return false;
   return Math.abs(x - y) > tolerance;
 }
+
+/** 처리자 표기 — 화면에는 이메일 전체 대신 계정명만 보여준다 (원본은 이력에 그대로 저장) */
+export function who(v: string | null | undefined): string {
+  if (!v) return '-';
+  const email = v.includes(':') ? v.slice(v.lastIndexOf(':') + 1) : v;
+  return email.split('@')[0] || '-';
+}

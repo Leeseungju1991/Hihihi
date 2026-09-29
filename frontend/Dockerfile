@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY quasar.config.ts index.html tsconfig.json postcss.config.js ./
 COPY src ./src
+COPY public ./public
 RUN npm ci && npx quasar build
 
 FROM nginx:1.27-alpine

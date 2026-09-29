@@ -1,4 +1,6 @@
-"""Vertex AI 연결부 (회사 GCP). 로컬에서는 import 되지 않는다.
+"""[미검증 · 회사 연결 예정] LLM 연동 — 기능만 구현, 실제 모델 호출 검증 안 함. UNVERIFIED.md §3
+
+Vertex AI 연결부 (회사 GCP). 로컬에서는 import 되지 않는다.
 
 회사 적용 시: requirements 에 google-cloud-aiplatform 추가, AX_LLM=vertex 설정.
 사용 모델·리전은 회사 정책에 맞춰 env 로 지정한다.

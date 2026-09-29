@@ -9,7 +9,7 @@
           {{ KIND_LABEL[a.kind] }} · {{ a.partner_id }} {{ kwh(a.kwh_before) }} → <b>{{ kwh(a.kwh_after) }}</b>
         </q-item-label>
         <q-item-label caption>{{ a.formula }}</q-item-label>
-        <q-item-label v-if="showApplied" caption>{{ a.applied_by }} · {{ dateTime(a.applied_at) }}</q-item-label>
+        <q-item-label v-if="showApplied" caption>{{ who(a.applied_by) }} · {{ dateTime(a.applied_at) }}</q-item-label>
       </q-item-section>
     </q-item>
   </q-list>
@@ -17,7 +17,7 @@
 
 <script setup lang="ts">
 import type { Adjustment } from '../api/types';
-import { dateTime, KIND_LABEL, kwh } from '../utils/format';
+import { dateTime, KIND_LABEL, kwh, who } from '../utils/format';
 
 defineProps<{ items: Adjustment[]; showApplied?: boolean }>();
 </script>

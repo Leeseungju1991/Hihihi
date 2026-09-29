@@ -54,6 +54,8 @@ def test_full_flow(client):
     # 확정 권한 없음
     assert client.post("/api/months/{}/finalize".format(MONTH), json={}, headers=H).status_code == 403
     boss = {"X-Goog-Authenticated-User-Email": "accounts.google.com:boss@corp"}
+    chk = client.get("/api/months/{}/finalize/check".format(MONTH), headers=boss).json()
+    assert chk["open_holds"] == ["P012"] and chk["warnings"]
     w = client.post("/api/months/{}/finalize".format(MONTH), json={}, headers=boss)
     assert w.status_code == 409 and w.json()["open_holds"] == ["P012"]
     ok = client.post("/api/months/{}/finalize".format(MONTH), json={"acknowledge": True}, headers=boss)
@@ -80,3 +82,10 @@ def test_exception_validation_error_shape(client):
     r = client.post("/api/exceptions", json={"month": MONTH, "plant_id": "P001", "type": "MANUAL_ISSUE"}, headers=H)
     assert r.status_code == 422
     assert set(r.json()["errors"]) == {"manual_kwh", "partner_after"}
+
+
+def test_request_shape_error_is_field_map(client):
+    r = client.post("/api/exceptions", json={"month": MONTH, "plant_id": "P001", "type": "NOT_A_TYPE"}, headers=H)
+    assert r.status_code == 422 and "type" in r.json()["errors"]
+    r = client.post("/api/exceptions", json={"month": MONTH, "plant_id": "P001", "type": "MANUAL_ISSUE", "manual_kwh": "NaN", "partner_after": "C"}, headers=H)
+    assert r.status_code == 422 and "manual_kwh" in r.json()["errors"]

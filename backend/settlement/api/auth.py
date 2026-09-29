@@ -1,4 +1,6 @@
-"""사용자 식별 — 회사에서는 user-py 로 교체하는 지점 (INTEGRATION.md §3).
+"""[미검증 · 회사 연결 예정] IAP·user-py 연결은 미검증. UNVERIFIED.md §2
+
+사용자 식별 — 회사에서는 user-py 로 교체하는 지점 (INTEGRATION.md §3).
 
 기본 동작:
 1) IAP 가 붙인 X-Goog-Authenticated-User-Email ("accounts.google.com:user@corp") 를 사용자로 사용
@@ -25,6 +27,7 @@ def _approvers() -> set:
 
 
 def _verify_iap_jwt(assertion: Optional[str]) -> Optional[str]:  # pragma: no cover - 외부 연동
+    """[미검증 · 회사 연결 예정] IAP JWT 서명 검증 — 기능만 구현, 실제 IAP 뒤에서 검증 안 함. UNVERIFIED.md §2"""
     audience = os.environ.get("AX_IAP_AUDIENCE")
     if not audience:
         return None

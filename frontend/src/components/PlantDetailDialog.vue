@@ -4,7 +4,7 @@
       <q-card-section class="row items-center">
         <div class="col">
           <div class="text-h6">{{ d?.result.plant_name ?? plantId }}</div>
-          <div class="text-caption text-grey-7">{{ plantId }} · {{ month }}</div>
+          <div class="text-caption text-muted">{{ plantId }} · {{ month }}</div>
         </div>
         <CategoryBadge v-if="d" :category="d.result.category" />
         <q-btn flat round icon="close" class="q-ml-sm" @click="onDialogCancel" />
@@ -52,18 +52,18 @@
               {{ d.explanation.source === 'LLM' ? 'LLM 분석' : '규칙 기반' }}
             </q-badge>
           </div>
-          <q-banner dense class="bg-orange-1 rounded-borders">
+          <q-banner dense class="callout-warn">
             {{ d.explanation.cause }}
             <div class="q-mt-xs text-weight-medium">추천 조치: {{ d.explanation.recommended_action }}</div>
-            <div v-if="d.explanation.rejected_reason" class="text-caption text-grey-7 q-mt-xs">
+            <div v-if="d.explanation.rejected_reason" class="text-caption text-muted q-mt-xs">
               (LLM 응답이 근거 검증을 통과하지 못해 규칙 기반 설명으로 대체: {{ d.explanation.rejected_reason }})
             </div>
           </q-banner>
-          <div class="text-caption text-grey-7 q-mt-sm">근거 데이터</div>
+          <div class="text-caption text-muted q-mt-sm">근거 데이터</div>
           <q-markup-table flat dense>
             <tbody>
               <tr v-for="e in d.explanation.evidence" :key="e.key">
-                <td class="text-grey-8">{{ e.label }}</td>
+                <td class="text-muted">{{ e.label }}</td>
                 <td class="num">{{ e.value }}</td>
               </tr>
             </tbody>
@@ -85,14 +85,14 @@
         <!-- 재검증 이력 -->
         <div>
           <div class="text-subtitle2 q-mb-xs">재검증 이력</div>
-          <div v-if="!d.rechecks.length" class="text-caption text-grey-7">없음</div>
+          <div v-if="!d.rechecks.length" class="text-caption text-muted">없음</div>
           <q-timeline v-else dense color="grey-6">
             <q-timeline-entry
               v-for="rc in [...d.rechecks].reverse()"
               :key="rc.attempt"
               :color="rc.passed ? 'positive' : 'warning'"
               :title="`${rc.attempt}회차 · ${rc.passed ? '통과' : '미통과'} · ${rc.trigger === 'AUTOMATION' ? '자동화' : '수동'}`"
-              :subtitle="`${dateTime(rc.at)} · ${rc.actor}`"
+              :subtitle="`${dateTime(rc.at)} · ${who(rc.actor)}`"
             >
               <div v-if="rc.cause" class="text-body2">{{ rc.cause }}</div>
             </q-timeline-entry>
@@ -103,7 +103,7 @@
         <div v-if="d.holds.length">
           <div class="text-subtitle2 q-mb-xs">보류 이력</div>
           <div v-for="(h, i) in d.holds" :key="i" class="text-body2">
-            {{ h.released ? `해제 · ${h.released_by} · ${dateTime(h.released_at)}` : `보류 · ${h.actor} · ${dateTime(h.at)}` }}
+            {{ h.released ? `해제 · ${who(h.released_by)} · ${dateTime(h.released_at)}` : `보류 · ${who(h.actor)} · ${dateTime(h.at)}` }}
             — {{ h.reason }}
           </div>
         </div>
@@ -133,7 +133,7 @@ import { useDialogPluginComponent } from 'quasar';
 import { api } from '../api/client';
 import type { ExceptionType, PlantDetail } from '../api/types';
 import { useSettlementStore } from '../stores/settlement';
-import { dateTime, kwh, mismatch, price, signed, won } from '../utils/format';
+import { dateTime, kwh, mismatch, price, signed, who, won } from '../utils/format';
 import AdjustmentList from './AdjustmentList.vue';
 import CategoryBadge from './CategoryBadge.vue';
 import { useResultActions } from './useResultActions';

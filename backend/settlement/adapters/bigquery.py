@@ -1,4 +1,6 @@
-"""BigQuery 구현 (회사 환경).
+"""[미검증 · 회사 연결 예정] BigQuery(프리즘) 구현 — 기능만 구현, 실제 BigQuery 실행 검증 안 함. UNVERIFIED.md §1
+
+BigQuery 구현 (회사 환경).
 
 - 원천: `{project}.{AX_BQ_SRC_DATASET}` 의 정규화 뷰(dataform/definitions/sources)만 SELECT. 쓰기 코드 없음.
 - 결과: `{project}.{AX_BQ_APP_DATASET}` 의 append-only 테이블(backend/sql/ddl)에 insert 만 한다.

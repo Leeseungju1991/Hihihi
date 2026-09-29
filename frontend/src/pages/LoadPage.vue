@@ -27,7 +27,7 @@
         </q-item>
       </q-list>
     </q-card>
-    <div class="text-caption text-grey-7 q-mt-sm">운영 데이터는 읽기만 합니다. 보정값은 별도 테이블에 저장됩니다.</div>
+    <div class="text-caption text-muted q-mt-sm">운영 데이터는 읽기만 합니다. 보정값은 별도 테이블에 저장됩니다.</div>
   </q-page>
 </template>
 

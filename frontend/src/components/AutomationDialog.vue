@@ -6,9 +6,9 @@
         <div class="text-h6">자동화 시작</div>
         <div class="text-body2 q-mt-xs">
           대상 <b>{{ preview.target_count }}건</b> · 적용 공식
-          <q-chip v-for="f in preview.formulas" :key="f" dense color="blue-1" text-color="primary">{{ KIND_LABEL[f] }}</q-chip>
+          <q-chip v-for="f in preview.formulas" :key="f" dense outline color="primary">{{ KIND_LABEL[f] }}</q-chip>
         </div>
-        <div class="text-caption text-grey-7">
+        <div class="text-caption text-muted">
           검침량·일 평균 발전시간만 보정하며 금액은 수정하지 않습니다. 보정값은 별도 테이블에 저장되고 실행 직후 자동 재검증합니다.
           재검증을 통과하지 못한 발전소의 보정은 되돌리고 실패 원인을 표시합니다.
         </div>
@@ -27,7 +27,7 @@
           </thead>
           <tbody>
             <tr v-for="it in preview.items" :key="it.plant_id">
-              <td class="text-no-wrap">{{ it.plant_name }}<div class="text-caption text-grey-7">{{ it.plant_id }}</div></td>
+              <td class="text-no-wrap">{{ it.plant_name }}<div class="text-caption text-muted">{{ it.plant_id }}</div></td>
               <td style="white-space: normal">
                 <div v-for="a in it.adjustments" :key="a.adjustment_id" class="q-mb-xs">
                   <q-badge :color="a.basis === 'ESTIMATED' ? 'orange' : 'teal'" class="q-mr-xs">
@@ -35,7 +35,7 @@
                   </q-badge>
                   <span class="text-weight-medium">{{ KIND_LABEL[a.kind] }}</span>
                   <span class="text-caption"> · {{ a.partner_id }} {{ kwh(a.kwh_before) }} → {{ kwh(a.kwh_after) }}</span>
-                  <div class="text-caption text-grey-7" style="white-space: normal">{{ a.formula }}</div>
+                  <div class="text-caption text-muted" style="white-space: normal">{{ a.formula }}</div>
                 </div>
               </td>
               <td class="num">{{ kwh(it.kwh_before) }}</td>
@@ -44,7 +44,7 @@
                 <q-badge v-if="it.predicted_pass" color="positive">통과 예상</q-badge>
                 <template v-else>
                   <q-badge color="warning">미통과 예상</q-badge>
-                  <div v-for="m in it.remaining_issues" :key="m" class="text-caption text-grey-8">{{ m }}</div>
+                  <div v-for="m in it.remaining_issues" :key="m" class="text-caption text-muted">{{ m }}</div>
                 </template>
               </td>
             </tr>

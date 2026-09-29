@@ -1,6 +1,6 @@
 config {
   type: "view",
-  description: "정규화 뷰 — 국세청 세금계산서. status 는 VALID | DISABLE 두 값으로 정규화.",
+  description: "[미검증 · 회사 연결 예정] 정규화 뷰 — 국세청 세금계산서. status 는 VALID | DISABLE 두 값으로 정규화.",
   columns: {
     nts_id: "국세청 승인번호",
     plant_id: "발전소 ID (사업자번호 → 발전소 매핑 필요 시 여기서)",

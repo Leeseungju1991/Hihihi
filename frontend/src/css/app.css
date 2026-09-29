@@ -1,17 +1,224 @@
-.mismatch {
-  color: var(--q-negative);
-  font-weight: 600;
+/* ── 색상 토큰 (라이트 / 다크) ───────────────────────────── */
+:root {
+  --app-bg: #f5f6f8;
+  --app-surface: #ffffff;
+  --app-surface-2: #f8f9fb;
+  --app-border: #e4e7ec;
+  --app-text: #111827;
+  --app-muted: #667085;
+  --app-subtle: #98a2b3;
+  --callout-bg: #f2f4f7;
+  --callout-warn-bg: #fff8ec;
+  --callout-warn-border: #fcd9a4;
+  --step-line: #d0d5dd;
+  --shadow-hover: 0 4px 14px rgba(16, 24, 40, 0.08);
 }
+
+body.body--dark {
+  --app-bg: #0e1116;
+  --app-surface: #161a21;
+  --app-surface-2: #1b2029;
+  --app-border: #2a303b;
+  --app-text: #e6e8ec;
+  --app-muted: #a0a8b6;
+  --app-subtle: #6e7787;
+  --callout-bg: #1e232c;
+  --callout-warn-bg: #2a2014;
+  --callout-warn-border: #6b4a1c;
+  --step-line: #394150;
+  --shadow-hover: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* ── 타이포그래피 ───────────────────────────── */
+body {
+  font-family:
+    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo',
+    'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+  color: var(--app-text);
+  background: var(--app-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.text-h5,
+.text-h6 {
+  font-family: inherit;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+.text-h6 {
+  font-size: 1.2rem;
+  line-height: 1.5;
+}
+.text-subtitle1,
+.text-subtitle2 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.text-caption {
+  letter-spacing: 0;
+}
+.text-muted {
+  color: var(--app-muted) !important;
+}
+.text-subtle {
+  color: var(--app-subtle) !important;
+}
+
 .num {
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
 }
+.mismatch {
+  color: var(--q-negative);
+  font-weight: 600;
+}
+
+/* 표 머리글: 작고 차분하게 */
+.q-table th,
+.q-markup-table th {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--app-muted);
+  letter-spacing: 0;
+}
+.q-table tbody td {
+  font-size: 13px;
+}
+
+/* ── 표면 ───────────────────────────── */
+.q-layout,
+.q-page-container {
+  background: var(--app-bg);
+}
+.app-header {
+  background: var(--app-surface) !important;
+  color: var(--app-text) !important;
+  border-bottom: 1px solid var(--app-border);
+}
+.q-card--bordered,
+.q-table--bordered {
+  border-color: var(--app-border);
+}
+.callout {
+  background: var(--callout-bg);
+  border-radius: 8px;
+}
+.callout-warn {
+  background: var(--callout-warn-bg);
+  border: 1px solid var(--callout-warn-border);
+  border-radius: 8px;
+}
+
+/* ── 절제된 UX 애니메이션 ───────────────────────────── */
+/* 페이지 전환: 짧은 페이드 + 4px 이동 */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.page-leave-to {
+  opacity: 0;
+}
+
+/* 새로 나타나는 결과 블록 */
+.fade-up-enter-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+.fade-up-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* 클릭 가능한 카드: 살짝 떠오름 */
+.hover-lift {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-hover);
+}
+
+/* 진행중 표시 점 */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+  }
+}
+.pulse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--q-primary);
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+
+/* 테마 전환 시 색만 부드럽게 */
+body,
+.app-header,
+.q-card,
+.q-table__container {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── 인쇄(PDF) ───────────────────────────── */
 @media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
   .no-print,
   .q-header,
-  .q-drawer {
+  .q-drawer,
+  .q-notifications {
     display: none !important;
+  }
+  /* 다크 모드에서 인쇄해도 흰 바탕 보고서로 */
+  .q-layout,
+  .q-page-container,
+  .q-table,
+  .q-table__card,
+  .q-markup-table,
+  .q-banner,
+  .callout,
+  .callout-warn {
+    background: #fff !important;
+    color: #000 !important;
   }
   .q-page-container {
     padding: 0 !important;

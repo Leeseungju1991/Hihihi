@@ -1,6 +1,6 @@
 config {
   type: "view",
-  description: "정규화 뷰 — 발전소 마스터. 앱은 이 컬럼 계약만 안다.",
+  description: "[미검증 · 회사 연결 예정] 정규화 뷰 — 발전소 마스터. 앱은 이 컬럼 계약만 안다.",
   columns: {
     plant_id: "발전소 ID (모든 원천의 조인 키)",
     name: "발전소명",

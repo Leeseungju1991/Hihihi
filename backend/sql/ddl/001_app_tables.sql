@@ -1,3 +1,4 @@
+-- [미검증 · 회사 연결 예정] DDL 미실행. UNVERIFIED.md §1
 -- AX 정산 오케스트레이터 결과 데이터셋 (append-only).
 -- 운영 원천 데이터셋과 분리된 별도 데이터셋. UPDATE/DELETE 없이 insert 만 하며, 최신 상태는
 -- ROW_NUMBER() 로 계산한다 (adapters/bigquery.py). 모든 행이 곧 이력/감사 기록이다.

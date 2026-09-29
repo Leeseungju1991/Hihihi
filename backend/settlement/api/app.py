@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -123,8 +124,9 @@ def build_repositories() -> Repositories:
     from ..adapters.memory import memory_repositories
     from ..fixtures import demo_bundle
 
-    bundle = demo_bundle()
-    return memory_repositories({bundle.month: bundle})
+    months = [m.strip() for m in os.environ.get("AX_DEMO_MONTHS", "").split(",") if m.strip()] or [None]
+    bundles = [demo_bundle(m) if m else demo_bundle() for m in months]
+    return memory_repositories({b.month: b for b in bundles})
 
 
 def build_explainer() -> Explainer:
@@ -135,6 +137,11 @@ def build_explainer() -> Explainer:
     return RuleBasedExplainer()
 
 
+def _demo_months(service: SettlementService) -> List[str]:
+    """메모리 백엔드에 적재된 정산월 목록 (가상 예외 시드용)."""
+    return sorted(getattr(service.repos.source, "_bundles", {}).keys())
+
+
 def create_app(service: Optional[SettlementService] = None, seed_demo: Optional[bool] = None) -> FastAPI:
     if service is None:
         service = SettlementService(build_repositories(), build_explainer(), RuleConfig.from_env())
@@ -143,11 +150,21 @@ def create_app(service: Optional[SettlementService] = None, seed_demo: Optional[
     if seed_demo:
         from ..fixtures import demo_exceptions
 
-        for exc in demo_exceptions():
-            service.create_exception(exc, "seed@local")
+        for month in _demo_months(service):
+            for exc in demo_exceptions(month):
+                service.create_exception(exc, "seed@local")
 
     app = FastAPI(title="AX 정산 오케스트레이터", version="0.1.0")
     app.state.service = service
+
+    @app.exception_handler(RequestValidationError)
+    async def _request_validation(_: Request, exc: RequestValidationError):
+        # 요청 형식 오류도 {필드: 메시지} 로 맞춰 화면이 필드 옆에 표시할 수 있게 한다
+        errors = {}
+        for e in exc.errors():
+            loc = [str(x) for x in e.get("loc", ()) if x not in ("body", "query", "path")]
+            errors[".".join(loc) or "request"] = "형식이 올바르지 않습니다"
+        return JSONResponse(status_code=422, content={"detail": "입력값 오류", "errors": errors})
 
     @app.exception_handler(ValidationError)
     async def _validation(_: Request, exc: ValidationError):
@@ -300,6 +317,10 @@ def _router(svc: SettlementService) -> APIRouter:
         return dump(svc.add_error_case(case, user.email))
 
     # ── 확정 ──
+    @r.get("/months/{month}/finalize/check")
+    def finalize_check(month: str, user: User = Depends(current_user)):
+        return {"locked": svc.is_locked(month), **svc.finalize_check(month)}
+
     @r.post("/months/{month}/finalize")
     def finalize(month: str, body: FinalizeIn, user: User = Depends(current_user)):
         if not user.is_approver:

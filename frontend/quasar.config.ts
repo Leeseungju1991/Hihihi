@@ -14,12 +14,26 @@ export default defineConfig(() => ({
   devServer: {
     open: false,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/api': { target: process.env.AX_API_PROXY ?? 'http://127.0.0.1:8000', changeOrigin: true },
     },
   },
   framework: {
     lang: 'ko-KR',
-    config: {},
+    config: {
+      dark: 'auto',
+      brand: {
+        primary: '#2563eb',
+        secondary: '#475467',
+        accent: '#7c3aed',
+        dark: '#1d2939',
+        'dark-page': '#0e1116',
+        positive: '#12a150',
+        negative: '#d92d20',
+        info: '#0e7490',
+        warning: '#dc8a06',
+      },
+      notify: { position: 'bottom-right', timeout: 3000 },
+    },
     plugins: ['Dialog', 'Notify', 'Loading'],
   },
 }));

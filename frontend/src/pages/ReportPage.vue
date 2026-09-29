@@ -12,10 +12,10 @@
         ]"
         @update:model-value="load"
       />
-      <q-btn color="dark" unelevated icon="picture_as_pdf" label="PDF 저장" :disable="!rep" @click="print" />
+      <q-btn :color="$q.dark.isActive ? 'grey-2' : 'dark'" :text-color="$q.dark.isActive ? 'dark' : 'white'" unelevated no-caps icon="picture_as_pdf" label="PDF 저장" :disable="!rep" @click="print" />
     </div>
 
-    <div v-if="error" class="text-grey-7 q-pa-lg text-center">{{ error }}</div>
+    <div v-if="error" class="text-muted q-pa-lg text-center">{{ error }}</div>
     <div v-else-if="!rep" class="flex flex-center q-pa-xl"><q-spinner size="lg" /></div>
 
     <article v-else class="report" style="max-width: 1000px">
@@ -23,12 +23,12 @@
         <div class="text-h5 text-weight-bold">
           발전매출 정산 {{ rep.kind === 'monthly' ? '종합' : '미결' }} 리포트 · {{ rep.month }}
         </div>
-        <div class="text-caption text-grey-7">
+        <div class="text-caption text-muted">
           대조 {{ rep.generated_from_run }} · {{ dateTime(rep.run_at) }} · 출력 {{ dateTime(new Date().toISOString()) }}
         </div>
       </header>
 
-      <q-banner dense class="bg-grey-2 rounded-borders q-mb-md">
+      <q-banner dense class="callout q-mb-md">
         <template #avatar>
           <q-badge :color="rep.summary_source === 'LLM' ? 'purple' : 'grey-7'">{{ rep.summary_source === 'LLM' ? 'LLM 요약' : '요약' }}</q-badge>
         </template>
@@ -55,16 +55,16 @@
             </tr>
             <tr>
               <th class="text-left">추정 보정</th>
-              <td>{{ rep.estimated_count }}건 <span class="text-caption text-grey-7">(인근 발전소 기반, 실측 아님)</span></td>
+              <td>{{ rep.estimated_count }}건 <span class="text-caption text-muted">(인근 발전소 기반, 실측 아님)</span></td>
             </tr>
             <tr>
               <th class="text-left">승인</th>
               <td>
                 <template v-if="rep.approval">
-                  {{ rep.approval.actor }} · {{ dateTime(rep.approval.at) }}
+                  {{ who(rep.approval.actor) }} · {{ dateTime(rep.approval.at) }}
                   <span v-if="rep.approval.open_holds.length" class="text-negative"> · 보류 {{ rep.approval.open_holds.length }}건 포함 확정</span>
                 </template>
-                <span v-else class="text-grey-7">미확정</span>
+                <span v-else class="text-muted">미확정</span>
               </td>
             </tr>
           </tbody>
@@ -77,7 +77,7 @@
           <thead><tr><th class="text-left">발전소</th><th class="text-left">사유</th><th class="text-left">처리자</th><th class="text-left">일시</th></tr></thead>
           <tbody>
             <tr v-for="h in rep.holds" :key="h.plant_id">
-              <td>{{ h.plant_id }}</td><td>{{ h.reason }}</td><td>{{ h.actor }}</td><td>{{ dateTime(h.at) }}</td>
+              <td>{{ h.plant_id }}</td><td>{{ h.reason }}</td><td>{{ who(h.actor) }}</td><td>{{ dateTime(h.at) }}</td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -85,7 +85,7 @@
 
       <section>
         <h3>자동화 전·후</h3>
-        <div v-if="!rep.automation.length" class="text-grey-7">자동화 없음</div>
+        <div v-if="!rep.automation.length" class="text-muted">자동화 없음</div>
         <q-markup-table v-else flat bordered dense>
           <thead>
             <tr>
@@ -94,7 +94,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(a, i) in rep.automation" :key="i" :class="{ 'text-grey-6': a.reverted }">
+            <tr v-for="(a, i) in rep.automation" :key="i" :class="{ 'text-subtle': a.reverted }">
               <td>{{ a.plant_id }}</td>
               <td>{{ KIND_LABEL[a.kind] }}<div class="text-caption">{{ a.partner_id }}</div></td>
               <td>
@@ -104,7 +104,7 @@
               <td class="num">{{ kwh(a.kwh_before) }}</td>
               <td class="num">{{ kwh(a.kwh_after) }}</td>
               <td class="text-caption" style="white-space: normal">{{ a.formula }}</td>
-              <td class="text-caption">{{ a.applied_by }}<br />{{ dateTime(a.applied_at) }}</td>
+              <td class="text-caption">{{ who(a.applied_by) }}<br />{{ dateTime(a.applied_at) }}</td>
             </tr>
           </tbody>
         </q-markup-table>
@@ -112,7 +112,7 @@
 
       <section>
         <h3>재검증 결과</h3>
-        <div v-if="!rep.rechecks.length" class="text-grey-7">재검증 없음</div>
+        <div v-if="!rep.rechecks.length" class="text-muted">재검증 없음</div>
         <q-markup-table v-else flat bordered dense>
           <thead><tr><th class="text-left">발전소</th><th class="text-right">횟수</th><th class="text-left">최종</th><th class="text-left">실패 원인 · 추천 조치</th></tr></thead>
           <tbody>
@@ -123,7 +123,7 @@
               <td style="white-space: normal">
                 <template v-if="!r.passed">
                   {{ r.last_cause }}<div class="text-caption">→ {{ r.last_action }}</div>
-                  <div class="text-caption text-grey-7">근거: {{ r.evidence.map((e) => `${e.label} ${e.value}`).join(' · ') }}</div>
+                  <div class="text-caption text-muted">근거: {{ r.evidence.map((e) => `${e.label} ${e.value}`).join(' · ') }}</div>
                 </template>
               </td>
             </tr>
@@ -133,7 +133,7 @@
 
       <section>
         <h3>미해결 · 확인 대상</h3>
-        <div v-if="!rep.items.length" class="text-grey-7">없음</div>
+        <div v-if="!rep.items.length" class="text-muted">없음</div>
         <q-markup-table v-else flat bordered dense>
           <thead>
             <tr><th class="text-left">발전소</th><th class="text-left">분류</th><th class="text-right">분개</th><th class="text-right">송장</th><th class="text-right">세금계산서</th><th class="text-left">문제</th></tr>
@@ -171,8 +171,10 @@ import { onMounted, ref } from 'vue';
 import { api, ApiError } from '../api/client';
 import type { Report } from '../api/types';
 import { useSettlementStore } from '../stores/settlement';
-import { dateTime, KIND_LABEL, kwh, won } from '../utils/format';
+import { useQuasar } from 'quasar';
+import { dateTime, KIND_LABEL, kwh, who, won } from '../utils/format';
 
+const $q = useQuasar();
 const store = useSettlementStore();
 const kind = ref<'monthly' | 'unresolved'>('monthly');
 const rep = ref<Report | null>(null);

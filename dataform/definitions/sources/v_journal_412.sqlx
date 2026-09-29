@@ -1,6 +1,6 @@
 config {
   type: "view",
-  description: "정규화 뷰 — 분개장 412(발전매출). 정산월·발전소·조합별 금액.",
+  description: "[미검증 · 회사 연결 예정] 정규화 뷰 — 분개장 412(발전매출). 정산월·발전소·조합별 금액.",
   columns: {
     entry_id: "분개 행 ID",
     plant_id: "발전소 ID",
