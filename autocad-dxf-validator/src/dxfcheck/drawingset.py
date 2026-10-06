@@ -150,6 +150,10 @@ class Sheet:
     present: Dict[str, int] = field(default_factory=dict)
     mm2_raw: List[TextItem] = field(default_factory=list)
     corpus: str = ""
+    llm_marks: set = field(default_factory=set)   # {(사실, id(TextItem))} LLM 해석 값
+
+    def is_llm(self, fact: str, value) -> bool:
+        return any((fact, id(t)) in self.llm_marks for v, t in self.facts.get(fact, []) if v == value)
 
     def value(self, fact: str):
         """도면 안에서 가장 많이 나온 값."""
@@ -163,6 +167,43 @@ class Sheet:
         return vals[0][1] if vals else None
 
 
+NUMERIC_FACTS = ("capacity_kw", "inverter_kw", "inverter_count", "module_count", "module_w", "series", "parallel",
+                 "dc_fuse_a", "mppt", "mppt_channel", "string_vmax", "inverter_vmax")
+
+
+def text_facts(n: str) -> List[Tuple[str, object]]:
+    """정규화 문자 하나에서 규칙으로 읽히는 수치 사실."""
+    out: List[Tuple[str, object]] = []
+    inv, mod = bool(_INV.search(n)), bool(_MOD.search(n))
+    if not inv:
+        for m in RX["capacity_kw"].finditer(n):
+            out.append(("capacity_kw", _num(m.group(1) or m.group(2))))
+    else:
+        for m in RX["inverter_kw"].finditer(n):
+            out.append(("inverter_kw", _num(m.group(1))))
+        for m in RX["inverter_count"].finditer(n):
+            out.append(("inverter_count", int(m.group(1))))
+    if mod:
+        for m in RX["module_count"].finditer(n):
+            out.append(("module_count", int(_num(m.group(1)))))
+        for m in RX["module_w"].finditer(n):
+            out.append(("module_w", int(m.group(1))))
+    for m in RX["series_parallel"].finditer(n):
+        out.append(("series", int(m.group(1))))
+        out.append(("parallel", int(m.group(2))))
+    for m in RX["dc_fuse_a"].finditer(n):
+        out.append(("dc_fuse_a", _num(m.group(1) or m.group(2))))
+    for m in RX["mppt"].finditer(n):
+        out.append(("mppt", int(m.group(1) or m.group(2))))
+    for m in RX["mppt_channel"].finditer(n):
+        out.append(("mppt_channel", int(m.group(1))))
+    for m in RX["string_vmax"].finditer(n):
+        out.append(("string_vmax", _num(m.group(1))))
+    for m in RX["inverter_vmax"].finditer(n):
+        out.append(("inverter_vmax", _num(m.group(1))))
+    return out
+
+
 def extract_facts(sheet: Sheet, settings: Settings) -> None:
     f: Dict[str, List[Tuple[object, TextItem]]] = {}
 
@@ -171,33 +212,8 @@ def extract_facts(sheet: Sheet, settings: Settings) -> None:
 
     for t in sheet.drawing.texts:
         n = t.norm
-        inv, mod = bool(_INV.search(n)), bool(_MOD.search(n))
-        if not inv:
-            for m in RX["capacity_kw"].finditer(n):
-                add("capacity_kw", _num(m.group(1) or m.group(2)), t)
-        else:
-            for m in RX["inverter_kw"].finditer(n):
-                add("inverter_kw", _num(m.group(1)), t)
-            for m in RX["inverter_count"].finditer(n):
-                add("inverter_count", int(m.group(1)), t)
-        if mod:
-            for m in RX["module_count"].finditer(n):
-                add("module_count", int(_num(m.group(1))), t)
-            for m in RX["module_w"].finditer(n):
-                add("module_w", int(m.group(1)), t)
-        for m in RX["series_parallel"].finditer(n):
-            add("series", int(m.group(1)), t)
-            add("parallel", int(m.group(2)), t)
-        for m in RX["dc_fuse_a"].finditer(n):
-            add("dc_fuse_a", _num(m.group(1) or m.group(2)), t)
-        for m in RX["mppt"].finditer(n):
-            add("mppt", int(m.group(1) or m.group(2)), t)
-        for m in RX["mppt_channel"].finditer(n):
-            add("mppt_channel", int(m.group(1)), t)
-        for m in RX["string_vmax"].finditer(n):
-            add("string_vmax", _num(m.group(1)), t)
-        for m in RX["inverter_vmax"].finditer(n):
-            add("inverter_vmax", _num(m.group(1)), t)
+        for k, v in text_facts(n):
+            add(k, v, t)
         if ("수전" in n or "연계" in n or "인입" in n):
             if "특고압" in n or "고압" in n or "22.9KV" in n:
                 add("receiving", "고압", t)
@@ -213,11 +229,17 @@ def extract_facts(sheet: Sheet, settings: Settings) -> None:
         if _MM2_RAW.search(t.text) and "㎟" not in t.text:
             sheet.mm2_raw.append(t)
 
+    # 규칙이 못 읽어 LLM 이 해석한 수치 (판정 시 '주의'로 낮춘다)
+    for fact, v, t in sheet.drawing.llm_facts:
+        add(fact, v, t)
+        sheet.llm_marks.add((fact, id(t)))
     # 전선 규격: DC(문자에 DC 또는 PV 전용 케이블) / AC
     for a in sheet.elec.annotations:
         is_dc = "DC" in a.item.norm or any(c.type in ("H1Z2Z2-K", "PV") for c in a.cables)
         for c in a.cables:
             add("dc_sq" if is_dc else "ac_sq", c.size, a.item)
+            if c.llm:
+                sheet.llm_marks.add(("dc_sq" if is_dc else "ac_sq", id(a.item)))
     for b, t in sheet.elec.breakers:
         if b.at is not None and b.kind != "FUSE":
             add("mccb_at", b.at, t)

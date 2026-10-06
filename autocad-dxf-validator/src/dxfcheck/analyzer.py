@@ -14,6 +14,7 @@ from .config import Settings
 from .drawing import INSUNITS_NAME, Drawing, detect_scale, is_dwg, load
 from .drawingset import CATALOG, Sheet, build_sheet, metadata_facts
 from .electrical import ElectricalModel
+from .llm import LLMSession, LLMStats, find_candidates, interpret
 from .model import Category, FileReport, Finding, PackageReport, Report, Severity
 from .profile import FACT_LABEL, Profile, compare_set, compare_sheet
 from .rules import Context, run_all
@@ -22,7 +23,7 @@ from .rules.set_rules import SetContext, run_set
 
 _SEV_ORDER = {Severity.ERROR: 0, Severity.WARNING: 1, Severity.INFO: 2}
 _CAT_ORDER = {c: i for i, c in enumerate(
-    (Category.FILE, Category.SET, Category.KEC, Category.PROFILE, Category.CAD, Category.DOC))}
+    (Category.FILE, Category.SET, Category.KEC, Category.PROFILE, Category.CAD, Category.DOC, Category.LLM))}
 _TABLE_FACTS = ("capacity_kw", "module_count", "module_w", "inverter_count", "inverter_kw", "series", "parallel",
                 "dc_fuse_a", "mppt", "dc_sq", "ac_sq", "receiving", "install_type", "tray_type")
 
@@ -42,17 +43,60 @@ def _collect(path: Path, settings: Settings, tmp_root: Path) -> Tuple[List[Extra
     return [ExtractedFile(path, path.name)], []
 
 
-def _analyze(path: Path, arcname: str, settings: Settings, siblings: Iterable[str] = ()
+_LLM_NOTE = " ※ 규칙이 읽지 못한 표기를 LLM이 해석한 값으로 같은 공식을 적용했습니다 — 원문을 확인하세요."
+
+
+def _downgrade_llm(findings: List[Finding], st: LLMStats) -> None:
+    """LLM 해석 값이 들어간 지적은 '주의' 이하로 낮추고 표시한다."""
+    if not st.resolved_handles:
+        return
+    for f in findings:
+        if f.category not in (Category.KEC, Category.CAD, Category.DOC):
+            continue
+        hit = f.location.get("handle") in st.resolved_handles or any(e in st.resolved_texts for e in f.evidence)
+        if hit and "(LLM 해석)" not in f.title:
+            if f.severity == Severity.ERROR:
+                f.severity = Severity.WARNING
+            f.title += " (LLM 해석)"
+            f.message += _LLM_NOTE
+
+
+def _llm_findings(st: LLMStats) -> List[Finding]:
+    out: List[Finding] = []
+    if not st.candidates:
+        return out
+    if not st.enabled:
+        out.append(Finding("LLM-000", Category.LLM, Severity.INFO, "미인식 표기",
+                           "전기·설계 표기로 보이지만 규칙이 읽지 못한 문자 %d건 — 판정에서 빠졌습니다. "
+                           "`--llm vertex`로 켜면 이 문자만 LLM이 해석하고, 판정은 같은 공식으로 합니다." % st.candidates,
+                           evidence=st.unresolved_samples[:10]))
+        return out
+    out.append(Finding("LLM-001", Category.LLM, Severity.INFO, "미인식 표기 LLM 해석",
+                       st.summary() + ". 채택한 값으로 내린 판정은 '(LLM 해석)'으로 표시하고 '주의' 이하로 낮췄습니다.",
+                       evidence=st.rejected_samples[:5] + ["오류: " + e for e in st.errors[:3]]))
+    if st.unresolved:
+        out.append(Finding("LLM-002", Category.LLM, Severity.INFO, "해석되지 않은 표기",
+                           "LLM으로도 해석하지 못했거나 예산 한도로 보내지 않은 문자 %d건 — 수동 확인이 필요합니다." % st.unresolved,
+                           evidence=st.unresolved_samples[:10]))
+    return out
+
+
+def _analyze(path: Path, arcname: str, settings: Settings, siblings: Iterable[str] = (),
+             llm: Optional[LLMSession] = None
              ) -> Tuple[FileReport, Optional[Drawing], Optional[ElectricalModel]]:
     fr = FileReport(path=arcname, kind="dxf")
     d = load(path, settings)
     if d.load_error:
         fr.findings.append(Finding("FILE-004", Category.FILE, Severity.ERROR, "DXF 읽기 실패", d.load_error))
         return fr, None, None
-    elec = electrical.build(d, settings)
+    anns = electrical.parse_all(d)
+    st = interpret(d, anns, find_candidates(d, anns), llm)
+    elec = electrical.build(d, settings, anns)
     ctx = Context(drawing=d, elec=elec, settings=settings, arcname=arcname,
                   sibling_files=set(siblings), scale=detect_scale(d))
-    fr.findings = _sort(run_all(ctx))
+    findings = run_all(ctx)
+    _downgrade_llm(findings, st)
+    fr.findings = _sort(findings + _llm_findings(st))
     fr.circuits = ctx.circuits
     ext = ""
     if d.extents:
@@ -73,15 +117,18 @@ def _analyze(path: Path, arcname: str, settings: Settings, siblings: Iterable[st
         "차단기 표기": len(elec.breakers),
         "회로 대조": len(elec.circuits),
         "설계 메타데이터": "%d개 키" % len(d.metadata) if d.metadata else "없음",
+        "미인식 표기 / LLM": st.summary() if st.candidates else "없음",
     }
     return fr, d, elec
 
 
-def analyze_dxf(path: Path, arcname: str, settings: Settings, siblings: Iterable[str] = ()) -> FileReport:
-    return _analyze(path, arcname, settings, siblings)[0]
+def analyze_dxf(path: Path, arcname: str, settings: Settings, siblings: Iterable[str] = (),
+                llm: Optional[LLMSession] = None) -> FileReport:
+    return _analyze(path, arcname, settings, siblings, llm)[0]
 
 
-def _iter_inputs(paths, settings: Settings, tmp_root: Path, report: Optional[Report]):
+def _iter_inputs(paths, settings: Settings, tmp_root: Path, report: Optional[Report],
+                 llm: Optional[LLMSession] = None):
     """입력마다 (이름, [(FileReport, Drawing, Elec)], 기타 FileReport) 를 낸다."""
     for raw in paths:
         p = Path(raw)
@@ -99,7 +146,7 @@ def _iter_inputs(paths, settings: Settings, tmp_root: Path, report: Optional[Rep
         for f in files:
             ext = f.path.suffix.lower()
             if ext == ".dxf" and not is_dwg(f.path):
-                analyzed.append(_analyze(f.path, f.arcname, settings, siblings))
+                analyzed.append(_analyze(f.path, f.arcname, settings, siblings, llm))
             elif ext == ".dwg" or (ext == ".dxf" and is_dwg(f.path)):
                 fr = FileReport(path=f.arcname, kind="dwg")
                 fr.findings.append(Finding(
@@ -122,14 +169,15 @@ def _sheets(analyzed, settings: Settings) -> List[Tuple[FileReport, Sheet]]:
 
 
 def analyze_paths(paths: Sequence[Union[str, Path]], settings: Optional[Settings] = None,
-                  keep_temp: bool = False, profile: Optional[Profile] = None) -> Report:
+                  keep_temp: bool = False, profile: Optional[Profile] = None,
+                  llm: Optional[LLMSession] = None) -> Report:
     settings = settings or Settings()
     report = Report(inputs=[str(p) for p in paths],
                     generated_at=_dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
                     settings=settings.to_dict())
     tmp_root = Path(tempfile.mkdtemp(prefix="dxfcheck_"))
     try:
-        for name, analyzed, others in _iter_inputs(paths, settings, tmp_root, report):
+        for name, analyzed, others in _iter_inputs(paths, settings, tmp_root, report, llm):
             pairs = _sheets(analyzed, settings)
             if profile is not None:
                 for fr, sh in pairs:
@@ -147,6 +195,12 @@ def analyze_paths(paths: Sequence[Union[str, Path]], settings: Optional[Settings
             report.archive_findings.append(Finding(
                 "FILE-001", Category.FILE, Severity.ERROR, "DXF 파일 없음",
                 "입력에서 검증할 DXF 파일을 찾지 못했습니다."))
+        cands = sum(1 for fr in report.files for f in fr.findings if f.rule_id in ("LLM-000", "LLM-001"))
+        if llm is not None and llm.complete is not None:
+            report.llm = {"상태": "켜짐", "모델": llm.model_tag or "-", "요약": llm.total.summary()}
+            llm.save()
+        elif cands:
+            report.llm = {"상태": "꺼짐", "요약": "미인식 표기가 있는 도면 %d개 (--llm vertex 로 해석 가능)" % cands}
     finally:
         if not keep_temp:
             shutil.rmtree(tmp_root, ignore_errors=True)

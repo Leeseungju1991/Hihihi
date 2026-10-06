@@ -110,7 +110,7 @@ def overload(ctx: Context) -> Iterable[Finding]:
     for c in ctx.elec.circuits:
         b, cb = c.breaker, c.cable
         row = CircuitRow(breaker=b.label(), cable=cb.label(), in_a=b.at, iz_a=None,
-                         result="판정불가", basis=c.basis)
+                         result="판정불가", basis=c.basis + (" · LLM 해석" if c.llm else ""))
         ctx.circuits.append(row)
         if not cb.low_voltage or "hv" in c.purposes:
             row.note = "고압 케이블 — 저압 허용전류표 대상 아님"
@@ -143,7 +143,7 @@ def overload(ctx: Context) -> Iterable[Finding]:
         if not problems:
             row.result = "적합"
             continue
-        sev = _sev(c.basis)
+        sev = Severity.WARNING if c.llm else _sev(c.basis)
         if guessed and loaded == 3:
             alt = iz_of(ctx, c, 2)
             if alt is not None and In <= alt and _i2_factor(ctx, b.kind) * In <= 1.45 * alt:

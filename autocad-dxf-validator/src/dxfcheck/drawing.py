@@ -92,6 +92,7 @@ class Drawing:
     metadata: Dict[str, object] = field(default_factory=dict)
     nonuniform_inserts: List[Tuple[str, float, float, str]] = field(default_factory=list)  # (블록, sx, sy, handle)
     paper_layouts: List[Tuple[str, float, float]] = field(default_factory=list)  # (배치, 용지 폭, 높이 mm)
+    llm_facts: List[Tuple[str, object, "TextItem"]] = field(default_factory=list)  # LLM 해석 수치 사실
 
     @property
     def total_entities(self) -> int:

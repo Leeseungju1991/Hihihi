@@ -23,6 +23,7 @@ class Category(str, Enum):
     KEC = "KEC 전기"
     SET = "도면 세트 정합성"
     PROFILE = "학습 기준 비교"
+    LLM = "미인식 표기 (LLM)"
 
 
 @dataclass
@@ -122,6 +123,7 @@ class Report:
     files: List[FileReport] = field(default_factory=list)
     archive_findings: List[Finding] = field(default_factory=list)
     packages: List[PackageReport] = field(default_factory=list)
+    llm: Dict[str, Any] = field(default_factory=dict)
     generated_at: str = ""
     settings: Dict[str, Any] = field(default_factory=dict)
 
@@ -157,6 +159,7 @@ class Report:
             "counts": {s.value: self.total(s) for s in Severity},
             "archive_findings": [f.to_dict() for f in self.archive_findings],
             "packages": [p.to_dict() for p in self.packages],
+            "llm": self.llm,
             "files": [f.to_dict() for f in self.files],
             "settings": self.settings,
         }

@@ -76,6 +76,24 @@ uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
 
 기준 샘플이 3개 미만이면 '참고', 3개 이상이면 '주의'로 표시합니다.
 
+## 미인식 표기 LLM 해석 (선택 · 기본 꺼짐)
+**판정은 항상 규칙(공식)이 합니다.** LLM은 규칙이 읽지 못한 문자만 '해석'합니다.
+
+1. **후보 선정 (무료, 항상 실행):** 전기·설계 표기처럼 보이지만 규칙이 못 읽은 문자만 고릅니다(예: `배선용차단기 3극 100AF 75암페어`, `케이블 CV 4심 6스퀘어`).
+   이미 읽힌 표기, 모델 코드(`HE-550M`), 시트 번호 `(1)`, 표제란 속성은 보내지 않습니다.
+   꺼져 있으면 `LLM-000 미인식 표기 N건`으로 알려 줍니다.
+2. **캐시:** 같은 문자는 다시 보내지 않습니다(`--llm-cache`, 기본 `.dxfcheck_llm_cache.json`).
+3. **예산:** 실행당 문자 수 `llm_max_texts`(200) · 묶음 `llm_batch_size`(40) · 호출 `llm_max_calls`(10) · 글자 `llm_max_chars`(20만).
+4. **가드:** 원문에 없는 숫자, 허용 목록 밖의 전선 종류·차단기 종류·항목명, 범위를 벗어난 값은 버립니다.
+5. **판정:** 채택한 값에 같은 공식(In ≤ Iz, 최소 굵기, 도면 간 일치 …)을 적용하고, 결과는 **'(LLM 해석)' 표시 + '주의' 이하**로 낮춥니다.
+   LLM 연결 실패·예산 초과 시에는 규칙 결과만 냅니다.
+
+```bash
+pip install google-cloud-aiplatform        # [미검증 · 회사 연결 예정]
+export GOOGLE_CLOUD_PROJECT=<프로젝트> AX_LLM_MODEL=<모델>    # AX_LLM_LOCATION 기본 asia-northeast3
+.venv/bin/dxfcheck 도면.zip --llm vertex
+```
+
 ## 인식하는 전기 표기
 - 전선: `F-CV 4C 25㎟`, `0.6/1kV F-CV 4C-25SQ`, `CV 1C 95SQ×4`, `2(CV 1C 240SQ×4)`, `HFIX 2.5㎟ X 3`, `TFR-CV`, `HFCO`, `CVV` …
 - 보호·접지도체: `+E 16㎟`, `F-GV 6㎟`, `접지선 GV 16SQ`, `피뢰 접지도체 …`

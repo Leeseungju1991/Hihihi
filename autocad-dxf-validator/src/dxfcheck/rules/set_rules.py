@@ -99,7 +99,8 @@ def consistency(ctx: SetContext, rid: str, fact: str, nos: Sequence[str]) -> Lis
         ctx.agreed[fact] = meta
         for s, v in rows:
             if not _close(v, meta, tol):
-                out.append(_f(rid, Severity.ERROR, "%s 불일치 (설계 메타데이터)" % label,
+                out.append(_f(rid, Severity.WARNING if s.is_llm(fact, v) else Severity.ERROR,
+                              "%s 불일치 (설계 메타데이터)%s" % (label, " (LLM 해석)" if s.is_llm(fact, v) else ""),
                               "%s의 %s %s ≠ 설계값 %s" % (s.no, label, _fmt(v), _fmt(meta)), s, s.where(fact),
                               evidence=[s.where(fact).text] if s.where(fact) else []))
         return out
@@ -110,10 +111,14 @@ def consistency(ctx: SetContext, rid: str, fact: str, nos: Sequence[str]) -> Lis
     ctx.agreed.setdefault(fact, next(v for _, v in rows if _fmt(v) == major))
     if len(cnt) > 1:
         ev = ["%s: %s" % (s.no, _fmt(v)) for s, v in rows]
-        bad = [s for s, v in rows if _fmt(v) != major]
-        out.append(_f(rid, Severity.ERROR, "도면 간 %s 불일치" % label,
-                      "%s 값이 도면마다 다릅니다(다수값 %s). 불일치 도면: %s" % (
-                          label, major, ", ".join(sorted({s.no for s in bad}))), bad[0], bad[0].where(fact), evidence=ev))
+        bad = [(s, v) for s, v in rows if _fmt(v) != major]
+        llm = any(s.is_llm(fact, v) for s, v in rows)
+        out.append(_f(rid, Severity.WARNING if llm else Severity.ERROR,
+                      "도면 간 %s 불일치%s" % (label, " (LLM 해석 포함)" if llm else ""),
+                      "%s 값이 도면마다 다릅니다(다수값 %s). 불일치 도면: %s%s" % (
+                          label, major, ", ".join(sorted({s.no for s, _ in bad})),
+                          " ※ 일부 값은 LLM 해석 — 원문 확인" if llm else ""),
+                      bad[0][0], bad[0][0].where(fact), evidence=ev))
     return out
 
 

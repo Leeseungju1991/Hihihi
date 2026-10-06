@@ -13,6 +13,7 @@ from typing import List, Optional
 from . import __version__
 from .analyzer import analyze_paths, learn_paths
 from .config import Settings
+from .llm import LLMSession, make_complete
 from .model import Severity
 from .profile import Profile
 from .report import to_json, to_markdown
@@ -52,6 +53,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--profile", help="학습 프로파일 JSON (dxfcheck learn 으로 생성)")
     ap.add_argument("--fail-on", choices=("error", "warning", "never"), default="never",
                     help="해당 등급 이상이 있으면 종료코드 1")
+    ap.add_argument("--llm", choices=("off", "vertex"), default="off",
+                    help="미인식 표기만 LLM 해석 (기본 off). vertex: GOOGLE_CLOUD_PROJECT·AX_LLM_MODEL 필요 [미검증]")
+    ap.add_argument("--llm-cache", default=".dxfcheck_llm_cache.json",
+                    help="LLM 해석 캐시 파일 (같은 문자는 다시 보내지 않음)")
     ap.add_argument("--version", action="version", version="dxfcheck " + __version__)
     args = ap.parse_args(argv)
 
@@ -64,7 +69,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.profile and profile is None:
         print("프로파일이 없습니다: %s (dxfcheck learn 으로 먼저 학습)" % args.profile, file=sys.stderr)
         return 2
-    report = analyze_paths(args.inputs, settings, profile=profile)
+    session = None
+    if args.llm != "off":
+        try:
+            complete, tag = make_complete(args.llm)
+        except Exception as exc:  # noqa: BLE001  (패키지·환경변수 누락)
+            print("LLM 연결 실패 — 규칙 검증만 합니다: %s" % exc, file=sys.stderr)
+            complete, tag = None, ""
+        if complete is not None:
+            session = LLMSession(complete, settings, args.llm_cache, tag)
+    report = analyze_paths(args.inputs, settings, profile=profile, llm=session)
 
     outputs = []
     if args.format in ("md", "both"):

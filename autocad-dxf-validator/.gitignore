@@ -2,3 +2,4 @@ reports/
 *.dxf
 !tests/**/*.dxf
 *.zip
+.dxfcheck_llm_cache.json

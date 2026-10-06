@@ -115,6 +115,8 @@ def to_markdown(report: Report) -> str:
            "- **종합 판정: %s %s** — 부적합 %d · 주의 %d · 참고 %d" % (
                _VERDICT_ICON.get(v, ""), v, report.total(Severity.ERROR),
                report.total(Severity.WARNING), report.total(Severity.INFO))]
+    if report.llm:
+        out.append("- 미인식 표기 LLM 해석: " + " · ".join("%s %s" % kv for kv in report.llm.items()))
     if report.files:
         out += ["", "| 파일 | 판정 | 점수 | 부적합 | 주의 | 참고 |", "|---|---|---|---|---|---|"]
         for fr in report.files:
@@ -140,6 +142,8 @@ def to_markdown(report: Report) -> str:
                                     s.get("supply_type"), s.get("power_factor", 0.9)),
             "- 도면 세트는 'AutoCAD 자동화 설계' 6장의 E-01~E-21 검증 항목을 따릅니다. 기준값은 XRECORD 설계 메타데이터, "
             "없으면 도면 간 다수값입니다.",
+            "- LLM은 규칙이 읽지 못한 문자만 '해석'합니다(원문에 없는 숫자는 버림). 판정은 해석된 값에 같은 공식을 적용하며, "
+            "그 결과는 '(LLM 해석)'으로 표시하고 '주의' 이하로 낮춥니다.",
             "- 학습 기준 비교는 승인된 기준 도면의 통계 프로파일(레이어·글꼴·블록·표제란·표준 문구·수치 항목)과의 차이입니다.",
             "- 도면 '문자' 표기를 읽어 판정합니다. 선(형상)만 그려진 결선, 블록 밖 기호, 표기 오기는 판정할 수 없습니다.",
             "- 차단기↔전선 연관은 같은 문자 → 같은 행 → 근접 순으로 추정하며, 근접 추정 결과는 '주의'로 낮춰 표시합니다.",

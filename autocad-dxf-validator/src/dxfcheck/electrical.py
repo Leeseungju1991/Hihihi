@@ -82,6 +82,7 @@ class Cable:
     count: Optional[int] = None
     parallel: int = 1
     parallel_guessed: bool = False
+    llm: bool = False          # 규칙이 못 읽어 LLM 해석으로 얻은 값
 
     @property
     def insulation(self) -> str:
@@ -112,6 +113,7 @@ class PEConductor:
     raw: str
     size: float
     grounding: bool   # 접지도체(접지극 연결) 여부. False면 회로 보호도체
+    llm: bool = False
 
 
 @dataclass
@@ -123,6 +125,7 @@ class Breaker:
     at: Optional[float] = None
     ma: Optional[float] = None
     ka: Optional[float] = None
+    llm: bool = False
 
     @property
     def residual(self) -> bool:
@@ -178,6 +181,10 @@ class Circuit:
     wiring: Optional[str] = None
     phase: Optional[int] = None
     texts: List[str] = field(default_factory=list)
+
+    @property
+    def llm(self) -> bool:
+        return self.breaker.llm or self.cable.llm or bool(self.pe and self.pe.llm)
 
 
 @dataclass
@@ -359,10 +366,14 @@ def _dist(a: TextItem, b: TextItem, s: Settings) -> Tuple[Optional[str], float]:
     return None, math.inf
 
 
-def build(drawing: Drawing, settings: Settings) -> ElectricalModel:
+def parse_all(drawing: Drawing) -> List[Annotation]:
+    """모든 문자를 규칙으로 해석한다(문자 하나당 Annotation 하나, 비어 있어도 포함)."""
+    return [parse_annotation(t) for t in drawing.texts]
+
+
+def build(drawing: Drawing, settings: Settings, annotations: Optional[List[Annotation]] = None) -> ElectricalModel:
     em = ElectricalModel()
-    for t in drawing.texts:
-        a = parse_annotation(t)
+    for a in (annotations if annotations is not None else parse_all(drawing)):
         if a.has_electrical or a.has_context:
             em.annotations.append(a)
 

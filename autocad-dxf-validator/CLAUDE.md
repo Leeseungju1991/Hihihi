@@ -21,6 +21,7 @@ AutoCAD 자동화 설계로 생성된 DXF 도면을 **파일·구조 / CAD 품�
    - 종합 판정(적합 / 조건부 적합 / 부적합 / 검증 불가)과 파일별 점수
    - 도면 세트가 인식되면: 도면 인식 표, 도면 간 수치 대조표의 ⚠ 항목, 세트 지적 사항(SET-*)
    - 학습 비교(PRF-*)는 기준 샘플 수와 함께 말한다(샘플 3개 미만이면 '참고' 등급)
+   - 미인식 표기(LLM-000/001/002): 건수와 예시를 말하고, '(LLM 해석)' 판정은 원문 확인이 필요하다고 덧붙인다
    - **부적합** 항목 전부: 무엇이, 어디서(레이어·좌표·원문), 어느 KEC 조항에 어긋나는지, 어떻게 고치는지
    - 주의 항목은 묶어서 요약, 참고 항목은 개수와 핵심만
    - 회로 대조표에서 부적합·주의 회로
@@ -39,6 +40,8 @@ src/dxfcheck/
                   set_rules  도면 세트 E-01~E-21 (@set_rule, SetContext → Finding)
   drawingset.py   도면번호 인식(파일명→표제란→문자), 정본 목록(CATALOG), 사실 추출, XRECORD 메타데이터 매핑
   profile.py      기준 도면 학습(통계 프로파일)·비교 (PRF-*)
+  llm/            미인식 표기만 LLM 해석: 후보 선정 → 캐시 → 호출(예산) → 가드 → 병합(llm=True)
+                  vertex.py [미검증] — 정산 backend/settlement/llm/vertex.py 와 같은 방식
   analyzer.py     입력 → Report,  report.py  Markdown/JSON,  cli.py
   samples.py      데모 DXF 생성 (python -m dxfcheck.samples <dir>) — 분전반 정상/불량, 태양광 세트 정상/불량
 ```
@@ -49,6 +52,8 @@ src/dxfcheck/
 - 근거가 불확실한 조항 번호는 쓰지 않는다. 판정 확신이 낮으면(근접 추정 등) 등급을 '주의'로 낮춘다.
 - 세트 기준값: XRECORD 설계 메타데이터 → 없으면 도면 간 다수값. `p_pv_kw`는 목표 용량이라 기준값으로 쓰지 않는다.
 - XRECORD 형식·메타데이터 키 이름은 [미검증 · 실제 SolarAutoDesign 출력으로 확인 예정] — `config.meta_keys`로 맞춘다.
+- **LLM은 읽기만 한다.** 판정·수치 결정은 규칙이 한다. LLM 값이 들어간 판정은 '주의' 이하로 낮추고 '(LLM 해석)'으로 표시한다.
+  LLM 출력은 `llm.guard`(원문에 있는 숫자·허용 목록만)를 통과해야 쓴다. 기본은 꺼짐(`--llm off`).
 - Python 3.9+, `from __future__ import annotations`.
 
 ## 명령
