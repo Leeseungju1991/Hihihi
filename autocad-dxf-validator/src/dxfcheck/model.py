@@ -1,6 +1,7 @@
 """검증 결과 모델."""
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -36,11 +37,31 @@ class Finding:
     reference: str = ""                       # 근거 조항 (예: KEC 212.4.1)
     location: Dict[str, Any] = field(default_factory=dict)  # layer, layout, handle, x, y
     evidence: List[str] = field(default_factory=list)       # 원문 텍스트 등
+    # 재설계용 수정안(규칙이 확정할 수 있을 때). redesign/fixes.py 의 op 형식:
+    #   {"op": "replace_number", "handle", "old", "new", "unit"} · {"op": "replace_text", "handle", "old", "new"}
+    #   {"op": "set_header", "var", "value"} · {"op": "delete_entity", "handle"} · {"op": "set_style", "style", "bigfont"}
+    #   {"op": "set_attrib", "handle", "tag", "value"} · {"op": "regenerate", "drawing"}  (+ "file", "reason")
+    fix: Dict[str, Any] = field(default_factory=dict)
+    file: str = ""                                          # 지적 대상 파일 (압축 내부 경로)
+
+    @property
+    def id(self) -> str:
+        """화면·피드백에서 쓰는 안정 ID (파일·규칙·위치·제목)."""
+        key = "|".join((self.file, self.rule_id, str(self.location.get("handle", "")),
+                        str(self.location.get("drawing", "")), self.title, self.message))
+        return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+
+    @property
+    def signature(self) -> str:
+        """파일과 무관한 지적 유형 키 (회귀 비교·학습용)."""
+        return "%s|%s|%s" % (self.rule_id, self.location.get("handle", ""), self.title)
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         d["category"] = self.category.value
         d["severity"] = self.severity.value
+        d["id"] = self.id
+        d["fixable"] = bool(self.fix) and self.fix.get("op") != "regenerate"
         return d
 
 
@@ -108,13 +129,14 @@ class PackageReport:
     metadata: Dict[str, Any] = field(default_factory=dict)
     findings: List[Finding] = field(default_factory=list)
     profile: Dict[str, Any] = field(default_factory=dict)
+    items21: List[Dict[str, Any]] = field(default_factory=list)      # E-01~E-21 도면별 결과(내용 단어)
 
     def count(self, sev: Severity) -> int:
         return sum(1 for f in self.findings if f.severity == sev)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"name": self.name, "sheets": self.sheets, "facts": self.facts, "metadata": self.metadata,
-                "profile": self.profile, "findings": [f.to_dict() for f in self.findings]}
+        return {"name": self.name, "items21": self.items21, "sheets": self.sheets, "facts": self.facts,
+                "metadata": self.metadata, "profile": self.profile, "findings": [f.to_dict() for f in self.findings]}
 
 
 @dataclass
@@ -126,6 +148,14 @@ class Report:
     llm: Dict[str, Any] = field(default_factory=dict)
     generated_at: str = ""
     settings: Dict[str, Any] = field(default_factory=dict)
+
+    def all_findings(self) -> List[Finding]:
+        out = list(self.archive_findings)
+        for p in self.packages:
+            out.extend(p.findings)
+        for f in self.files:
+            out.extend(f.findings)
+        return out
 
     @property
     def dxf_files(self) -> List[FileReport]:

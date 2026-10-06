@@ -19,6 +19,7 @@ def _f(rid, sev, title, msg, ref="", **kw) -> Finding:
     return Finding(rid, C, sev, title, msg, ref, **kw)
 
 
+
 @rule
 def audit(ctx: Context) -> Iterable[Finding]:
     d = ctx.drawing
@@ -46,7 +47,9 @@ def units(ctx: Context) -> Iterable[Finding]:
     if d.insunits == 0:
         yield _f("CAD-003", Severity.WARNING, "도면 단위 미지정",
                  "$INSUNITS가 '단위 없음'입니다. 블록 삽입·외부참조 시 축척이 틀어질 수 있습니다. "
-                 "전기 도면은 mm 단위를 권장합니다(UNITS 명령).")
+                 "전기 도면은 mm 단위를 권장합니다(UNITS 명령).",
+                 fix={"ops": [{"op": "set_header", "var": "$INSUNITS", "value": 4}], "reason": "단위 mm 지정",
+                      "confidence": "rule"})
     elif d.insunits != 4:
         yield _f("CAD-003", Severity.INFO, "도면 단위가 mm가 아님",
                  "도면 단위가 %s입니다. 국내 전기 설계도면은 mm 단위가 일반적입니다."
@@ -115,11 +118,15 @@ def geometry(ctx: Context) -> Iterable[Finding]:
     if d.zero_length:
         yield _f("CAD-009", Severity.WARNING, "길이 0 선분",
                  "길이가 0인 LINE %d개 — 결선 오인·스냅 오류 원인이 됩니다." % len(d.zero_length),
-                 evidence=["handle %s (레이어 %s)" % x for x in d.zero_length[:10]])
+                 evidence=["handle %s (레이어 %s)" % x for x in d.zero_length[:10]],
+                 fix={"ops": [{"op": "delete_entity", "handle": h} for h, _ in d.zero_length if h],
+                      "reason": "길이 0 선분 삭제", "confidence": "rule"})
     if d.duplicate_lines:
         yield _f("CAD-009", Severity.WARNING, "중복 선분",
                  "완전히 겹친 LINE %d개 — OVERKILL로 정리하세요. 물량 산출이 부풀려집니다." % len(d.duplicate_lines),
-                 evidence=["handle %s (레이어 %s)" % x for x in d.duplicate_lines[:10]])
+                 evidence=["handle %s (레이어 %s)" % x for x in d.duplicate_lines[:10]],
+                 fix={"ops": [{"op": "delete_entity", "handle": h} for h, _ in d.duplicate_lines if h],
+                      "reason": "중복 선분 삭제", "confidence": "rule"})
 
 
 def _basename(p: str) -> str:
@@ -183,7 +190,9 @@ def korean_fonts(ctx: Context) -> Iterable[Finding]:
         font = d.styles.get(style.upper(), ("", ""))[0]
         yield _f("CAD-014", Severity.WARNING, "한글 글꼴 깨짐 위험",
                  "문자 스타일 '%s'(글꼴 %s)에 한글 빅폰트가 없어 한글 문자 %d개가 '?'로 보일 수 있습니다. "
-                 "whgtxt.shx 등 빅폰트나 TTF 글꼴을 지정하세요." % (style, font, n))
+                 "whgtxt.shx 등 빅폰트나 TTF 글꼴을 지정하세요." % (style, font, n),
+                 fix={"ops": [{"op": "set_style", "style": style, "bigfont": "whgtxt.shx"}],
+                      "reason": "문자 스타일 '%s'에 한글 빅폰트 whgtxt.shx 지정" % style, "confidence": "rule"})
 
 
 @rule

@@ -148,3 +148,38 @@ def test_no_candidates_for_model_codes_and_titles(tmp_path):
                         ("모듈 상세도 HE-550M", 0, -20), ("외함 제3종 접지", 0, -30)])
     d = load(p, Settings())
     assert find_candidates(d, parse_all(d)) == []     # 비용 낭비 방지: 수량 아닌 숫자는 보내지 않는다
+
+
+def test_gemini_request_format(monkeypatch):
+    from dxfcheck.llm import gemini
+
+    seen = {}
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps({"candidates": [{"content": {"parts": [{"text": '{"items": []}'}]}}]}).encode()
+
+    def opener(req, timeout):
+        seen["url"], seen["headers"], seen["body"] = req.full_url, dict(req.header_items()), json.loads(req.data)
+        return Resp()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "secret-key")
+    monkeypatch.setenv("GEMINI_MODEL", "test-model")
+    out = gemini.make_gemini_complete(opener=opener)("hello")
+    assert out == '{"items": []}'
+    assert "secret-key" not in seen["url"] and seen["headers"]["X-goog-api-key"] == "secret-key"
+    assert "test-model:generateContent" in seen["url"]
+    assert seen["body"]["generationConfig"] == {"temperature": 0, "responseMimeType": "application/json"}
+    monkeypatch.delenv("GEMINI_API_KEY")
+    monkeypatch.delenv("GEMINI_API_KEY_SECRET", raising=False)
+    try:
+        gemini.get_api_key()
+        assert False
+    except RuntimeError:
+        pass

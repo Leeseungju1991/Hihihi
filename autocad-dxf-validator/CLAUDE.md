@@ -41,7 +41,10 @@ src/dxfcheck/
   drawingset.py   도면번호 인식(파일명→표제란→문자), 정본 목록(CATALOG), 사실 추출, XRECORD 메타데이터 매핑
   profile.py      기준 도면 학습(통계 프로파일)·비교 (PRF-*)
   llm/            미인식 표기만 LLM 해석: 후보 선정 → 캐시 → 호출(예산) → 가드 → 병합(llm=True)
-                  vertex.py [미검증] — 정산 backend/settlement/llm/vertex.py 와 같은 방식
+                  gemini.py [미검증] — Gemini API 키(Secret Manager → GEMINI_API_KEY), vertex.py [미검증]
+  redesign/       재설계: fixes(op 적용) · feedback(학습) · llm_fix(LLM 수정안+가드) · loop(라운드·회귀 되돌림·ZIP)
+  api.py          FastAPI — validate / feedback / redesign / download (Cloud Run)
+clients/ts/       dxfcheck.ts — 화면(Node/TS)용 타입·클라이언트 (api.py 응답과 같은 형식)
   analyzer.py     입력 → Report,  report.py  Markdown/JSON,  cli.py
   samples.py      데모 DXF 생성 (python -m dxfcheck.samples <dir>) — 분전반 정상/불량, 태양광 세트 정상/불량
 ```
@@ -54,10 +57,16 @@ src/dxfcheck/
 - XRECORD 형식·메타데이터 키 이름은 [미검증 · 실제 SolarAutoDesign 출력으로 확인 예정] — `config.meta_keys`로 맞춘다.
 - **LLM은 읽기만 한다.** 판정·수치 결정은 규칙이 한다. LLM 값이 들어간 판정은 '주의' 이하로 낮추고 '(LLM 해석)'으로 표시한다.
   LLM 출력은 `llm.guard`(원문에 있는 숫자·허용 목록만)를 통과해야 쓴다. 기본은 꺼짐(`--llm off`).
+- 수정안은 규칙이 `Finding.fix = {"ops": [...], "reason", "confidence"}` 로 낸다. 새 규칙에 고칠 수 있는 근거가 있으면 fix 도 함께 만든다.
+- 재설계는 재검증으로만 채택한다: 새 부적합이 생긴 파일은 되돌린다. 형상 생성이 필요한 수정은 `regenerate` op 로 넘긴다.
+- API 응답 필드를 바꾸면 `clients/ts/dxfcheck.ts` 도 함께 바꾼다.
+- `feedback.json`(학습 데이터)은 커밋 전에 사용자에게 묻는다.
 - Python 3.9+, `from __future__ import annotations`.
 
 ## 명령
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python -m dxfcheck.samples /tmp/s && .venv/bin/dxfcheck /tmp/s/samples.zip
+.venv/bin/dxfcheck redesign /tmp/s/pv_bad.zip -o /tmp/s/out.zip
+DXFCHECK_JOBS_DIR=/tmp/jobs .venv/bin/uvicorn dxfcheck.api:app --port 8000      # API
 ```

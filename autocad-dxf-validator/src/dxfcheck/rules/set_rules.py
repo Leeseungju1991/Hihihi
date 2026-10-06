@@ -49,13 +49,47 @@ def set_rule(fn: SetRule) -> SetRule:
 
 
 def _f(rid: str, sev: Severity, title: str, msg: str, sheet: Optional[Sheet] = None,
-       item: Optional[TextItem] = None, ref: str = "AutoCAD 자동화 설계 6장", evidence=None) -> Finding:
+       item: Optional[TextItem] = None, ref: str = "AutoCAD 자동화 설계 6장", evidence=None, fix=None) -> Finding:
     loc: Dict[str, object] = {}
     if sheet is not None:
         loc["drawing"] = "%s (%s)" % (sheet.no or "?", sheet.arcname)
     if item is not None:
         loc.update(layer=item.layer, layout=item.layout, handle=item.handle, x=round(item.x, 2), y=round(item.y, 2))
-    return Finding(rid, S, sev, title, msg, ref, loc, list(evidence or []))
+    return Finding(rid, S, sev, title, msg, ref, loc, list(evidence or []), fix=fix or {},
+                   file=sheet.arcname if sheet is not None else "")
+
+
+# 사실 → 숫자 교체 단위 (redesign.fixes.UNITS)
+FACT_UNIT = {"capacity_kw": "kw", "inverter_kw": "kw", "module_count": "ea", "inverter_count": "unit",
+             "module_w": "w", "series": "series", "parallel": "parallel", "dc_fuse_a": "a", "mppt": "plain",
+             "dc_sq": "size", "ac_sq": "size"}
+TEXT_FACTS = ("install_type", "tray_type")
+
+
+def _ops_for(s: Sheet, fact: str, old, new) -> List[dict]:
+    """도면 s 에서 fact 값 old 를 new 로 바꾸는 op 목록 (해당 값이 적힌 모든 문자)."""
+    items = [t for v, t in s.facts.get(fact, []) if _fmt(v) == _fmt(old) and t.handle and not t.kind.startswith("BLOCK-")]
+    seen, ops = set(), []
+    for t in items:
+        if t.handle in seen:
+            continue
+        seen.add(t.handle)
+        if fact in FACT_UNIT:
+            ops.append({"op": "replace_number", "file": s.arcname, "handle": t.handle, "old": old, "new": new,
+                        "unit": FACT_UNIT[fact]})
+        elif fact in TEXT_FACTS:
+            ops.append({"op": "replace_text", "file": s.arcname, "handle": t.handle, "old": str(old), "new": str(new)})
+    return ops
+
+
+def _fixdict(ops: List[dict], reason: str, confidence: str = "rule") -> dict:
+    return {"ops": ops, "reason": reason, "confidence": confidence} if ops else {}
+
+
+def regen(drawing: str, reason: str, **params) -> dict:
+    """도면 생성기(SolarAutoDesign) 재실행이 필요한 수정 — 텍스트 수정으로는 못 고친다."""
+    return {"ops": [{"op": "regenerate", "drawing": drawing, "params": params}], "reason": reason,
+            "confidence": "generator"}
 
 
 def _close(a, b, tol_pct: float) -> bool:
@@ -102,7 +136,8 @@ def consistency(ctx: SetContext, rid: str, fact: str, nos: Sequence[str]) -> Lis
                 out.append(_f(rid, Severity.WARNING if s.is_llm(fact, v) else Severity.ERROR,
                               "%s 불일치 (설계 메타데이터)%s" % (label, " (LLM 해석)" if s.is_llm(fact, v) else ""),
                               "%s의 %s %s ≠ 설계값 %s" % (s.no, label, _fmt(v), _fmt(meta)), s, s.where(fact),
-                              evidence=[s.where(fact).text] if s.where(fact) else []))
+                              evidence=[s.where(fact).text] if s.where(fact) else [],
+                              fix=_fixdict(_ops_for(s, fact, v, meta), "%s %s → 설계값 %s" % (label, _fmt(v), _fmt(meta)))))
         return out
     if not rows:
         return out
@@ -118,7 +153,9 @@ def consistency(ctx: SetContext, rid: str, fact: str, nos: Sequence[str]) -> Lis
                       "%s 값이 도면마다 다릅니다(다수값 %s). 불일치 도면: %s%s" % (
                           label, major, ", ".join(sorted({s.no for s, _ in bad})),
                           " ※ 일부 값은 LLM 해석 — 원문 확인" if llm else ""),
-                      bad[0][0], bad[0][0].where(fact), evidence=ev))
+                      bad[0][0], bad[0][0].where(fact), evidence=ev,
+                      fix=_fixdict([op for s_, v_ in bad for op in _ops_for(s_, fact, v_, ctx.agreed[fact])],
+                                   "%s → 다수값 %s" % (label, major), "majority")))
     return out
 
 
@@ -162,7 +199,8 @@ def completeness(ctx: SetContext) -> Iterable[Finding]:
     if listed:
         for no in sorted(set(listed) - present):
             yield _f("SET-E01-1", Severity.ERROR, "목록표에 있으나 파일 없음",
-                     "E-01 목록표의 %s %s 도면 파일이 없습니다." % (no, listed[no]), ctx.first("E-01"))
+                     "E-01 목록표의 %s %s 도면 파일이 없습니다." % (no, listed[no]), ctx.first("E-01"),
+                     fix=regen(no, "%s 도면 생성" % no))
         for no in sorted(present - set(listed) - {"E-01"}):
             yield _f("SET-E01-1", Severity.ERROR, "파일은 있으나 목록표에 없음",
                      "%s 도면이 생성되었지만 E-01 목록표에 없습니다." % no, ctx.first(no))
@@ -201,9 +239,17 @@ def company_name(ctx: SetContext) -> Iterable[Finding]:
     key = _key(name)
     missing = [s for s in ctx.sheets if key not in s.corpus]
     if missing:
+        ops = []
+        for s in missing:
+            for _, attrs, handle in s.drawing.inserts_attribs:
+                tag = next((t for t in attrs if ("회사" in t or "COMPANY" in t) and not attrs[t]), None)
+                if tag and handle:
+                    ops.append({"op": "set_attrib", "file": s.arcname, "handle": handle, "tag": tag, "value": name})
+                    break
         yield _f("SET-E01-2", Severity.WARNING, "표제란 회사명 누락",
                  "'%s' 표기가 없는 도면 %d개" % (name, len(missing)),
-                 evidence=["%s (%s)" % (s.no or "?", s.arcname) for s in missing[:15]])
+                 evidence=["%s (%s)" % (s.no or "?", s.arcname) for s in missing[:15]],
+                 fix=_fixdict(ops, "표제란 회사명 '%s' 기입" % name))
 
 
 # ── 용량·수량 ───────────────────────────────────────────────────────────
@@ -221,8 +267,12 @@ def capacity(ctx: SetContext) -> Iterable[Finding]:
             target = ctx.meta_raw.get("p_pv_kw")
             hint = " 목표 용량(p_pv_kw=%s)을 그대로 적은 것으로 보입니다." % target if (
                 target is not None and _close(cap, _meta_num(target), 0.1)) else ""
+            ops = [] if "capacity_kw" in ctx.meta else [
+                op for s in ctx.sheets for v in {v for v, _ in s.facts.get("capacity_kw", [])}
+                if not _close(v, designed, 0.1) for op in _ops_for(s, "capacity_kw", v, round(designed, 3))]
             yield _f("SET-E01-3", Severity.ERROR, "설계 용량 ≠ 모듈 수 × 모듈 출력",
-                     "표기 용량 %skW, 실제 설계 용량 %d장 × %dW = %skW.%s" % (_fmt(cap), n, w, _fmt(designed), hint))
+                     "표기 용량 %skW, 실제 설계 용량 %d장 × %dW = %skW.%s" % (_fmt(cap), n, w, _fmt(designed), hint),
+                     fix=_fixdict(ops, "설계 용량 %skW 로 통일" % _fmt(designed)))
 
 
 @set_rule
@@ -248,7 +298,9 @@ def strings(ctx: SetContext) -> Iterable[Finding]:
             if v > lim:
                 yield _f("SET-E02-3", Severity.ERROR, "최대 스트링 전압 > 인버터 최대 입력전압",
                          "스트링 %sV > 인버터 %sV (최저 기온 보정 전압으로 직렬 수를 다시 산정)" % (_fmt(v), _fmt(lim)), s,
-                         s.where("string_vmax"))
+                         s.where("string_vmax"),
+                         fix=regen("E-04", "직렬 수 재산정 (스트링 %sV ≤ %sV)" % (_fmt(v), _fmt(lim)),
+                                   max_string_v=lim, current_string_v=v))
 
 
 @set_rule
@@ -261,7 +313,8 @@ def fuses_and_mppt(ctx: SetContext) -> Iterable[Finding]:
         ch = {v for v, _ in s21.facts.get("mppt_channel", [])}
         if ch and len(ch) != int(mppt):
             yield _f("SET-E21-1", Severity.ERROR, "MPPT 채널 매핑 불일치",
-                     "E-21 MPPT 채널 %d개 ≠ MPPT 수 %d" % (len(ch), int(mppt)), s21)
+                     "E-21 MPPT 채널 %d개 ≠ MPPT 수 %d" % (len(ch), int(mppt)), s21,
+                     fix=regen("E-21", "MPPT %d채널로 재생성" % int(mppt), mppt=int(mppt)))
 
 
 # ── 케이블 ──────────────────────────────────────────────────────────────
@@ -271,6 +324,24 @@ def _sizes(s: Optional[Sheet], fact: str) -> set:
 
 def _sq(v: float) -> str:
     return "%gSQ" % v
+
+
+def _match_by_breaker(e04: Sheet, e05: Sheet, extra) -> Tuple[List[dict], Optional[TextItem]]:
+    """E-05 회로의 차단기와 같은 E-04 회로를 찾아 그 전선 규격으로 바꾸는 op."""
+    key = lambda c: (c.breaker.kind, c.breaker.poles, c.breaker.af, c.breaker.at)  # noqa: E731
+    ref: Dict[tuple, set] = {}
+    for c in e04.elec.circuits:
+        ref.setdefault(key(c), set()).add(c.cable.size)
+    ops, first = [], None
+    for c in e05.elec.circuits:
+        sizes = ref.get(key(c), set())
+        it = c.cable_item
+        if c.cable.size in extra and len(sizes) == 1 and it is not None and it.handle:
+            new = next(iter(sizes))
+            ops.append({"op": "replace_number", "file": e05.arcname, "handle": it.handle,
+                        "old": c.cable.size, "new": new, "unit": "size"})
+            first = first or it
+    return ops, first
 
 
 @set_rule
@@ -284,25 +355,30 @@ def cables(ctx: SetContext) -> Iterable[Finding]:
             meta = float(_meta_num(meta))
             if meta not in s05:
                 hard = sorted(v for v in s05 if _sq(v) in suspects)
+                hops = [op for v in hard for op in _ops_for(e05, fact, v, meta)]
                 yield _f("SET-E05-1", Severity.ERROR, "간선 규격 ≠ KEC 계산서",
                          "E-05 %s 케이블 %s — 계산서 산정값 %s 없음.%s" % (
                              "AC" if fact == "ac_sq" else "DC", ", ".join(_sq(v) for v in sorted(s05)), _sq(meta),
-                             " 하드코딩 의심 값: %s" % ", ".join(_sq(v) for v in hard) if hard else ""), e05)
+                             " 하드코딩 의심 값: %s" % ", ".join(_sq(v) for v in hard) if hard else ""), e05,
+                         fix=_fixdict(hops, "하드코딩 값 → 계산서 %s" % _sq(meta)))
         elif e04 is not None and s05:
             s04 = _sizes(e04, fact)
             extra = sorted(s05 - s04)
             if s04 and extra:
                 hard = [v for v in extra if _sq(v) in suspects]
+                ops, item = _match_by_breaker(e04, e05, extra)
                 yield _f("SET-E05-1", Severity.ERROR if hard else Severity.WARNING,
                          "간선도·단선결선도 케이블 규격 불일치" + (" (하드코딩 의심)" if hard else ""),
                          "E-05에만 있는 규격 %s (E-04: %s)" % (
-                             ", ".join(_sq(v) for v in extra), ", ".join(_sq(v) for v in sorted(s04))), e05)
+                             ", ".join(_sq(v) for v in extra), ", ".join(_sq(v) for v in sorted(s04))), e05, item,
+                         fix=_fixdict(ops, "같은 차단기의 E-04 규격으로 통일"))
     meta_dc = ctx.meta.get("dc_sq")
     for s in ctx.by_no("E-11"):
         for v, t in s.facts.get("dc_sq", []):
             if meta_dc is not None and not _close(v, float(_meta_num(meta_dc)), 0.1):
                 yield _f("SET-E11-2", Severity.ERROR, "DC 케이블 단면적 ≠ 계산서",
-                         "%s %s ≠ 설계값 %s" % (s.no, _sq(v), _sq(float(_meta_num(meta_dc)))), s, t)
+                         "%s %s ≠ 설계값 %s" % (s.no, _sq(v), _sq(float(_meta_num(meta_dc)))), s, t,
+                         fix=_fixdict(_ops_for(s, "dc_sq", v, float(_meta_num(meta_dc))), "DC 단면적 → 계산서 값"))
                 break
             if v + 1e-9 < ctx.settings.dc_cable_min_sq:
                 yield _f("SET-E11-2", Severity.WARNING, "DC 케이블 단면적 기준 미달",
@@ -322,7 +398,8 @@ def inverter_pages(ctx: SetContext) -> Iterable[Finding]:
         n = max(1, len(pages[0].drawing.paper_layouts))
     if n != int(inv):
         yield _f("SET-E11-1", Severity.ERROR, "DC 간선도 페이지 수 ≠ 인버터 수",
-                 "E-11 %d페이지(파일 또는 배치) ≠ 인버터 %d대" % (n, int(inv)), pages[0])
+                 "E-11 %d페이지(파일 또는 배치) ≠ 인버터 %d대" % (n, int(inv)), pages[0],
+                 fix=regen("E-11", "인버터 %d대 분 페이지 생성" % int(inv), inverter_count=int(inv)))
 
 
 # ── 수전·설치 형태·옵션 ─────────────────────────────────────────────────
@@ -439,9 +516,12 @@ def notation_and_layout(ctx: SetContext) -> Iterable[Finding]:
     for s in ctx.sheets:
         d = s.drawing
         if s.mm2_raw:
+            ops = [{"op": "replace_regex", "file": s.arcname, "handle": t.handle, "pattern": r"mm\s*[²2]",
+                    "new": "㎟", "flags": "i"} for t in s.mm2_raw if t.handle and not t.kind.startswith("BLOCK-")]
             yield _f("SET-P91", Severity.WARNING, "단면적 단위 'mm²' 사용",
                      "%s: 'mm²/mm2' 표기 %d개 — CAD 글꼴 호환을 위해 '㎟'를 쓰세요." % (s.no or s.arcname, len(s.mm2_raw)),
-                     s, s.mm2_raw[0], "AutoCAD 자동화 설계 9장", [t.text for t in s.mm2_raw[:5]])
+                     s, s.mm2_raw[0], "AutoCAD 자동화 설계 9장", [t.text for t in s.mm2_raw[:5]],
+                     fix=_fixdict(ops, "mm² → ㎟"))
         if d.nonuniform_inserts:
             sev = Severity.WARNING if s.no == "E-03" else Severity.INFO
             yield _f("SET-E03-2", sev, "블록 비균일 축척(스케일 왜곡)",

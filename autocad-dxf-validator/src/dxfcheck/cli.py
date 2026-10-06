@@ -2,6 +2,7 @@
 
   dxfcheck <ZIP|DXF|폴더>... [-f md|json|both] [-o 출력] [--config 설정.json] [--profile 학습.json]
   dxfcheck learn <기준 ZIP|DXF|폴더>... --profile 학습.json     (기존 프로파일에 누적)
+  dxfcheck redesign <ZIP> -o 결과.zip [--rounds 3] [--fix-llm gemini] [--feedback feedback.json]
 """
 from __future__ import annotations
 
@@ -41,10 +42,47 @@ def _learn(argv: List[str]) -> int:
     return 0
 
 
+def _redesign(argv: List[str]) -> int:
+    from .redesign import FeedbackStore, redesign, summary_markdown
+
+    ap = argparse.ArgumentParser(prog="dxfcheck redesign", description="검증 실패 지적 수정 → 재검증(회귀) 반복 → ZIP")
+    ap.add_argument("input", help="ZIP · DXF · 폴더")
+    ap.add_argument("-o", "--out", required=True, help="결과 ZIP 경로")
+    ap.add_argument("--rounds", type=int, default=3)
+    ap.add_argument("--config")
+    ap.add_argument("--profile")
+    ap.add_argument("--feedback", default="feedback.json", help="피드백 학습 파일 (누적)")
+    ap.add_argument("--llm", choices=("off", "gemini", "vertex"), default="off", help="미인식 표기 해석")
+    ap.add_argument("--fix-llm", choices=("off", "gemini", "vertex"), default="off",
+                    help="규칙이 못 고친 지적의 LLM 수정안")
+    ap.add_argument("--llm-cache", default=".dxfcheck_llm_cache.json")
+    args = ap.parse_args(argv)
+    settings = Settings.load(args.config)
+    profile = Profile.load(args.profile) if args.profile else None
+    session, fix = None, None
+    try:
+        if args.llm != "off":
+            c, tag = make_complete(args.llm)
+            session = LLMSession(c, settings, args.llm_cache, tag)
+        if args.fix_llm != "off":
+            fix = make_complete(args.fix_llm)[0]
+    except Exception as exc:  # noqa: BLE001
+        print("LLM 연결 실패 — 규칙 수정만 합니다: %s" % exc, file=sys.stderr)
+    r = redesign(args.input, settings, out_zip=args.out, profile=profile, llm=session, fix_complete=fix,
+                 feedback=FeedbackStore.load(args.feedback), max_rounds=args.rounds)
+    if session:
+        session.save()
+    sys.stdout.write(summary_markdown(r))
+    print("저장: %s" % r.zip_path, file=sys.stderr)
+    return 0 if r.status == "통과" else 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "learn":
         return _learn(argv[1:])
+    if argv and argv[0] == "redesign":
+        return _redesign(argv[1:])
     ap = argparse.ArgumentParser(prog="dxfcheck", description="AutoCAD DXF 도면 검증 (KEC · 도면 세트 · 학습 기준)")
     ap.add_argument("inputs", nargs="+", help="ZIP · DXF · 폴더")
     ap.add_argument("-f", "--format", choices=("md", "json", "both"), default="md")
@@ -53,8 +91,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--profile", help="학습 프로파일 JSON (dxfcheck learn 으로 생성)")
     ap.add_argument("--fail-on", choices=("error", "warning", "never"), default="never",
                     help="해당 등급 이상이 있으면 종료코드 1")
-    ap.add_argument("--llm", choices=("off", "vertex"), default="off",
-                    help="미인식 표기만 LLM 해석 (기본 off). vertex: GOOGLE_CLOUD_PROJECT·AX_LLM_MODEL 필요 [미검증]")
+    ap.add_argument("--llm", choices=("off", "gemini", "vertex"), default="off",
+                    help="미인식 표기만 LLM 해석 (기본 off). gemini: GEMINI_API_KEY(Secret Manager)·GEMINI_MODEL [미검증]")
     ap.add_argument("--llm-cache", default=".dxfcheck_llm_cache.json",
                     help="LLM 해석 캐시 파일 (같은 문자는 다시 보내지 않음)")
     ap.add_argument("--version", action="version", version="dxfcheck " + __version__)

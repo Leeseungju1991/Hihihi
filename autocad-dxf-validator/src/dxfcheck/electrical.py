@@ -181,6 +181,8 @@ class Circuit:
     wiring: Optional[str] = None
     phase: Optional[int] = None
     texts: List[str] = field(default_factory=list)
+    cable_item: Optional[TextItem] = None   # 전선 규격이 적힌 문자 (재설계 수정 대상)
+    pe_item: Optional[TextItem] = None
 
     @property
     def llm(self) -> bool:
@@ -460,4 +462,6 @@ def _circuit(b: Breaker, cable: Cable, ba: Annotation, ca: Optional[Annotation],
         _merge_ctx(c, ca)
     pes = (ca.pes if ca is not None else []) or ba.pes
     c.pe = pes[0] if pes else None
+    c.cable_item = ca.item if ca is not None else ba.item
+    c.pe_item = (ca.item if ca is not None and ca.pes else ba.item) if c.pe else None
     return c

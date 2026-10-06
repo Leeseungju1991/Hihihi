@@ -40,6 +40,41 @@ uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
 | | KEC-232.12 | 전선관 점유율 (동일 48%·혼합 32%, 근사 외경) |
 | | KEC-300 | 고압·특고압 설비 존재 안내 (문자로 판정하지 않음) |
 
+## 화면 연동 흐름 (로직 API)
+화면(Node/TS · Tailwind 껍데기)은 아래 API만 부르면 됩니다. TypeScript 타입·클라이언트: [`clients/ts/dxfcheck.ts`](clients/ts/dxfcheck.ts)
+
+| 단계 | 호출 | 결과 |
+|---|---|---|
+| ① 첨부 검증 | `POST /api/validate` (ZIP, `llm=off\|gemini`) | `report` — 종합 판정, **`packages[0].items21`(E-01~E-21 21개: 상태·내용 단어·요약·주요 지적)**, 지적마다 `id`·`fixable` |
+| ② 피드백(선택) | `POST /api/jobs/{id}/feedback` `[{finding_id, decision: accept\|reject\|correct, correction}]` | 학습 저장(다음 재설계에 반영) |
+| ③ [재설계] 버튼 | `POST /api/jobs/{id}/redesign` `{max_rounds, fix_llm}` | 수정 → 재검증(회귀 확인·되돌림) 반복. `before`/`after`(items21 포함)·`changes`·`manual`·`rounds` |
+| ④ 다운로드 | `GET /api/jobs/{id}/download` | ZIP: `design/`(수정 도면) + `reports/before·after·redesign .md/.json` |
+
+재설계를 다시 누르면 마지막 결과에서 이어서 합니다.
+
+### 재설계 수정 순서
+1. **학습된 수정** — 사람이 `correct`로 남긴 문자(같은 규칙·같은 원문)
+2. **규칙 수정(공식)** — 전선 굵기 역산(Iz ≥ In, 전압강하 한도), 최소 굵기, PE·접지도체, 감도 15mA, AF 프레임, 종별 접지 용어, KEC 색상, 도면 간 수치(설계값 또는 다수값), 같은 차단기의 E-04 규격, `mm²→㎟`, 회사명, 단위·중복 선·빅폰트
+3. **LLM 수정안** (`fix_llm=gemini`, 규칙이 못 고친 지적만) — 원문·지적·KEC 표준 계열의 숫자만 허용하는 가드 통과 시
+4. **도면 생성기 재실행** — 페이지 추가·직렬 수 재산정·MPPT 채널 등은 `regenerate` 요청으로 반환(`redesign(..., regenerator=훅)`으로 SolarAutoDesign 연결)
+
+재검증에서 **새 부적합이 생긴 파일은 그 라운드 변경을 되돌리고** 실패로 학습합니다(`reject` 또는 반복 실패 2회 → 다시 제안 안 함).
+한 라운드에 한 문자는 한 지적만 고칩니다(겹치는 수정은 다음 라운드 재검증 후 재계산).
+
+### GCP 배포 [미검증]
+```bash
+gcloud run deploy dxfcheck --source autocad-dxf-validator --region asia-northeast3 \
+  --set-secrets GEMINI_API_KEY=<gemini-key-secret>:latest \
+  --set-env-vars GEMINI_MODEL=<모델명>,DXFCHECK_JOBS_DIR=/data/jobs \
+  --add-volume name=jobs,type=cloud-storage,bucket=<버킷> --add-volume-mount volume=jobs,mount-path=/data
+```
+- Gemini 키는 Secret Manager → Cloud Run 환경변수로 주입(코드 불필요). 직접 읽으려면 `GEMINI_API_KEY_SECRET=projects/../secrets/../versions/latest`.
+- 인스턴스 디스크는 휘발되므로 작업 폴더는 GCS 볼륨에 둡니다. 인증은 앞단(IAP·Node 서버)이 맡습니다.
+
+```bash
+.venv/bin/dxfcheck redesign 도면.zip -o 결과.zip --rounds 3 [--fix-llm gemini] [--feedback feedback.json]   # CLI 로 같은 흐름
+```
+
 ## 도면 세트 정합성 (E-01~E-21)
 도면번호를 **파일명 → 표제란 도면번호 속성 → 도면 문자** 순으로 인식하고 'AutoCAD 자동화 설계' 6장 항목을 검사합니다.
 기준값은 **XRECORD 설계 메타데이터**(JSON, 문자열 태그 또는 이진 310 태그 · zlib 압축 지원), 없으면 **도면 간 다수값**입니다.
@@ -89,9 +124,9 @@ uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
    LLM 연결 실패·예산 초과 시에는 규칙 결과만 냅니다.
 
 ```bash
-pip install google-cloud-aiplatform        # [미검증 · 회사 연결 예정]
-export GOOGLE_CLOUD_PROJECT=<프로젝트> AX_LLM_MODEL=<모델>    # AX_LLM_LOCATION 기본 asia-northeast3
-.venv/bin/dxfcheck 도면.zip --llm vertex
+export GEMINI_API_KEY=<Secret Manager 에서 주입> GEMINI_MODEL=<모델>     # [미검증 · 회사 연결 예정]
+.venv/bin/dxfcheck 도면.zip --llm gemini
+# (대안) Vertex AI: GOOGLE_CLOUD_PROJECT·AX_LLM_MODEL + --llm vertex
 ```
 
 ## 인식하는 전기 표기

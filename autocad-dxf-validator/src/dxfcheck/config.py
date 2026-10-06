@@ -58,6 +58,8 @@ class Settings:
     llm_batch_size: int = 40        # 호출 한 번에 묶는 문자 수
     llm_max_calls: int = 10         # 실행당 호출 수 상한
     llm_max_chars: int = 200000     # 실행당 프롬프트 총 글자 수 상한
+    # ── 재설계
+    redesign_llm_max: int = 20      # 라운드당 LLM 수정안 요청 상한(규칙이 못 고친 지적만)
     # ── 압축 해제 한도
     max_archive_files: int = 3000
     max_archive_bytes: int = 2 * 1024 ** 3

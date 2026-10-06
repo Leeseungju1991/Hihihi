@@ -82,6 +82,13 @@ def _package_md(p: PackageReport) -> List[str]:
            "부적합 %d · 주의 %d · 참고 %d" % (p.count(Severity.ERROR), p.count(Severity.WARNING), p.count(Severity.INFO))]
     if p.profile:
         out += ["", "- 학습 기준: " + " · ".join("%s %s" % kv for kv in p.profile.items())]
+    if p.items21:
+        icon = {"적합": "✅", "조건부 적합": "⚠️", "부적합": "❌", "누락": "⛔", "해당없음": "➖"}
+        out += ["", "### 도면별 검증 결과 (E-01~E-21)", "", "| 도면 | 도면명 | 판정 | 내용 | 주요 지적 |", "|---|---|---|---|---|"]
+        for it in p.items21:
+            out.append("| %s | %s | %s %s | %s | %s |" % (
+                it["no"], _esc(it["name"]), icon.get(it["status"], ""), it["status"], _esc(it["summary"]),
+                _esc(" / ".join(it["issues"])) or "-"))
     if p.sheets:
         out += ["", "### 도면 인식", "", "| 도면번호 | 파일 | 표제란 도면명 | 정본 도면명 | 인식 근거 |", "|---|---|---|---|---|"]
         out += ["| %s | %s | %s | %s | %s |" % tuple(_esc(r[k]) for k in ("도면번호", "파일", "표제란 도면명", "정본 도면명", "인식 근거"))

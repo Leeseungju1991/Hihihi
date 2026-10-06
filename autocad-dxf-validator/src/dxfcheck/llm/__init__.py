@@ -346,11 +346,15 @@ def interpret(d: Drawing, anns: List[Annotation], cands: List[Candidate], sessio
 
 
 def make_complete(provider: str) -> Tuple[Optional[Complete], str]:
-    """provider: off | vertex. 반환 (complete, 모델 태그)."""
+    """provider: off | gemini | vertex. 반환 (complete, 모델 태그)."""
     if provider in ("", "off", None):
         return None, ""
+    if provider == "gemini":
+        from .gemini import make_gemini_complete, model_name as gm
+
+        return make_gemini_complete(), gm()
     if provider == "vertex":
         from .vertex import make_vertex_complete, model_name
 
         return make_vertex_complete(), model_name()
-    raise ValueError("알 수 없는 LLM 제공자: %s (off | vertex)" % provider)
+    raise ValueError("알 수 없는 LLM 제공자: %s (off | gemini | vertex)" % provider)

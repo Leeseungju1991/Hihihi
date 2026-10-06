@@ -146,3 +146,28 @@ CONDUIT_REF = "내선규정 전선관 굵기 선정 (KEC 232 배선설비 연계
 # HFIX 450/750V 대략 완성 외경(mm) — 제조사 사양으로 교체 가능
 HFIX_OD = {1.5: 3.3, 2.5: 4.0, 4: 4.6, 6: 5.2, 10: 6.7, 16: 7.8, 25: 9.7, 35: 11.0,
            50: 13.0, 70: 15.0, 95: 17.0, 120: 19.0}
+
+
+# ── 재설계용 역산 ───────────────────────────────────────────────────────
+def min_size_for_current(insulation: str, method: str, loaded: int, need_a: float,
+                         parallel: int = 1, derating: float = 1.0) -> Optional[float]:
+    """허용전류 Iz × 병렬 × 보정 ≥ need_a 를 만족하는 최소 표준 단면적."""
+    for s in SIZES:
+        a = ampacity(insulation, method, loaded, s)
+        if a is not None and a * parallel * derating >= need_a - 1e-9:
+            return float(s)
+    return None
+
+
+def next_size(at_least: float) -> Optional[float]:
+    for s in SIZES:
+        if s >= at_least - 1e-9:
+            return float(s)
+    return None
+
+
+def next_frame(at: float) -> Optional[float]:
+    for f in sorted(STD_AF):
+        if f >= at - 1e-9:
+            return float(f)
+    return None

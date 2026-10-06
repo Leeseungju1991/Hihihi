@@ -96,6 +96,8 @@ def _analyze(path: Path, arcname: str, settings: Settings, siblings: Iterable[st
                   sibling_files=set(siblings), scale=detect_scale(d))
     findings = run_all(ctx)
     _downgrade_llm(findings, st)
+    for f in findings:
+        f.file = f.file or arcname
     fr.findings = _sort(findings + _llm_findings(st))
     fr.circuits = ctx.circuits
     ext = ""
@@ -184,13 +186,14 @@ def analyze_paths(paths: Sequence[Union[str, Path]], settings: Optional[Settings
                     fr.findings = _sort(fr.findings + compare_sheet(profile, sh))
             report.files.extend(fr for fr, _, _ in analyzed)
             report.files.extend(others)
-            pkg = _package(name, [sh for _, sh in pairs], settings, profile)
+            # 계통접지 방식은 세트 단위 표기(보통 E-04 단선결선도)로 본다
+            if any(sh.no for _, sh in pairs) and \
+                    any(_EARTHING.search(t.norm) for _, sh in pairs for t in sh.drawing.texts):
+                for fr, _ in pairs:
+                    fr.findings = [f for f in fr.findings if f.rule_id != "KEC-203"]
+            pkg = _package(name, [sh for _, sh in pairs], settings, profile, {fr.path: fr for fr, _ in pairs})
             if pkg is not None:
                 report.packages.append(pkg)
-                # 계통접지 방식은 세트 단위 표기(보통 E-04 단선결선도)로 본다
-                if any(_EARTHING.search(t.norm) for _, sh in pairs for t in sh.drawing.texts):
-                    for fr, _ in pairs:
-                        fr.findings = [f for f in fr.findings if f.rule_id != "KEC-203"]
         if not report.dxf_files:
             report.archive_findings.append(Finding(
                 "FILE-001", Category.FILE, Severity.ERROR, "DXF 파일 없음",
@@ -207,8 +210,72 @@ def analyze_paths(paths: Sequence[Union[str, Path]], settings: Optional[Settings
     return report
 
 
-def _package(name: str, sheets: List[Sheet], settings: Settings, profile: Optional[Profile]
-             ) -> Optional[PackageReport]:
+_PRESENCE_LABEL = {"whm": "WHM 계량기", "pen": "PEN", "pe": "보호접지(PE)", "bonding": "등전위본딩", "clamp": "접지 클램프",
+                   "polarity": "(+)/(−) 극성", "spacing": "지지 간격", "thickness": "부재 두께", "bolt": "볼트",
+                   "ground_caption": "접지선 규격", "mppt_word": "MPPT", "string_word": "스트링", "inverter_word": "인버터"}
+_UNIT = {"capacity_kw": "kW", "inverter_kw": "kW", "module_count": "장", "module_w": "W", "inverter_count": "대",
+         "series": "직렬", "parallel": "병렬", "dc_fuse_a": "A", "mppt": "", "dc_sq": "㎟", "ac_sq": "㎟",
+         "mccb_at": "AT", "string_vmax": "V", "inverter_vmax": "V"}
+
+
+def _fmtv(v) -> str:
+    return ("%g" % v) if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)
+
+
+def items21(sheets: List[Sheet], set_findings: List[Finding], files: dict, agreed: dict) -> List[dict]:
+    """E-01~E-21 도면별 결과: 상태 · 내용 단어(keywords) · 요약 · 주요 지적."""
+    out = []
+    rcv = str(agreed.get("receiving", ""))
+    for no, (name, _) in CATALOG.items():
+        sh = [s for s in sheets if s.no == no]
+        if not sh:
+            status = "해당없음" if (no == "E-15" and rcv in ("고압", "HV")) else "누락"
+            rel = [f for f in set_findings if no in f.message and f.severity != Severity.INFO]
+            out.append({"no": no, "name": name, "status": status, "files": [], "keywords": [],
+                        "summary": "도면 없음" if status == "누락" else "고압 수전 — 제외 대상",
+                        "errors": sum(f.severity == Severity.ERROR for f in rel),
+                        "warnings": sum(f.severity == Severity.WARNING for f in rel),
+                        "issues": [f.title for f in rel[:3]], "finding_ids": [f.id for f in rel]})
+            continue
+        kw: List[str] = []
+        for s in sh:
+            for fact in ("capacity_kw", "module_count", "module_w", "inverter_count", "inverter_kw", "mppt",
+                         "dc_fuse_a", "dc_sq", "ac_sq", "mccb_at", "receiving", "install_type", "tray_type",
+                         "string_vmax"):
+                v = s.value(fact)
+                if v is None:
+                    continue
+                label = FACT_LABEL.get(fact, fact).split("(")[0]
+                word = "%s %s%s" % (label, _fmtv(v), _UNIT.get(fact, ""))
+                if word not in kw:
+                    kw.append(word)
+            if s.value("series") and s.value("parallel"):
+                w = "%d직렬×%d병렬" % (s.value("series"), s.value("parallel"))
+                if w not in kw:
+                    kw.append(w)
+            for k in s.present:
+                lab = _PRESENCE_LABEL.get(k)
+                if lab and lab not in kw:
+                    kw.append(lab)
+        rel = [f for f in set_findings if f.location.get("drawing", "").startswith(no) or
+               any(op.get("file") in [s.arcname for s in sh] for op in f.fix.get("ops", []))]
+        for s in sh:
+            fr = files.get(s.arcname)
+            if fr is not None:
+                rel += [f for f in fr.findings if f.category != Category.LLM]
+        rel = [f for f in rel if f.severity != Severity.INFO]
+        e = sum(f.severity == Severity.ERROR for f in rel)
+        w = sum(f.severity == Severity.WARNING for f in rel)
+        out.append({"no": no, "name": name, "status": "부적합" if e else "조건부 적합" if w else "적합",
+                    "files": [s.arcname for s in sh], "keywords": kw[:12],
+                    "summary": " · ".join(kw[:6]) if kw else (sh[0].title or name),
+                    "errors": e, "warnings": w, "issues": [f.title for f in _sort(rel)[:3]],
+                    "finding_ids": [f.id for f in rel]})
+    return out
+
+
+def _package(name: str, sheets: List[Sheet], settings: Settings, profile: Optional[Profile],
+             files: Optional[dict] = None) -> Optional[PackageReport]:
     numbered = [s for s in sheets if s.no]
     if not numbered:
         return None   # 도면번호(E-xx)가 없으면 단일 도면 검증만
@@ -244,6 +311,7 @@ def _package(name: str, sheets: List[Sheet], settings: Settings, profile: Option
             pkg.facts[FACT_LABEL.get(fact, fact)] = row
     if profile is not None:
         pkg.profile = profile.summary()
+    pkg.items21 = items21(sheets, pkg.findings, files or {}, ctx.agreed)
     return pkg
 
 

@@ -3,3 +3,4 @@ reports/
 !tests/**/*.dxf
 *.zip
 .dxfcheck_llm_cache.json
+feedback.json
