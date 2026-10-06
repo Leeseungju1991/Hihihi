@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 
 @dataclass
@@ -30,6 +30,29 @@ class Settings:
     layer0_ratio_warn: float = 0.3
     max_findings_per_rule: int = 30
     max_block_depth: int = 4
+    # ── 도면 세트(E-01~E-21) 검증
+    company_name: str = "에이치에너지"        # 표제란 회사명 (빈 문자열이면 검사 안 함)
+    set_tolerance_pct: float = 0.5           # 도면 간·메타데이터 수치 허용 오차(%)
+    dc_cable_min_sq: float = 6.0             # DC 케이블 최소 단면적 [확인 필요: 근거 명시]
+    hardcode_suspects: List[str] = field(default_factory=lambda: ["70SQ", "100AT", "100A"])
+    standard_layers: List[str] = field(default_factory=list)  # 비어 있으면 학습 프로파일 사용
+    paper_size_mm: List[float] = field(default_factory=lambda: [420.0, 297.0])  # A3
+    # 메타데이터 키 → 표준 사실명 (SolarAutoDesign 키 이름은 [미검증])
+    meta_keys: Dict[str, List[str]] = field(default_factory=lambda: {
+        "capacity_kw": ["as_designed_kw", "designed_kw"],   # p_pv_kw 는 '목표' 용량이라 기준으로 쓰지 않음
+        "module_count": ["module_count", "n_modules", "modules"],
+        "inverter_count": ["inverter_count", "n_inverters", "inverters"],
+        "series": ["n_series", "series", "modules_per_string"],
+        "parallel": ["n_parallel", "parallel", "strings"],
+        "dc_fuse_a": ["fuse_pick_a", "dc_fuse_a"],
+        "dc_sq": ["dc_sq"],
+        "ac_sq": ["ac_sq"],
+        "mppt": ["mppt_count", "n_mppt"],
+        "receiving": ["receiving", "receiving_mode", "supply_mode"],
+        "install_type": ["install_type", "mount_type"],
+        "tray_type": ["tray_type"],
+        "skip_inverter_outline": ["skip_inverter_outline", "skip_outline"],
+    })
     # ── 압축 해제 한도
     max_archive_files: int = 3000
     max_archive_bytes: int = 2 * 1024 ** 3
@@ -46,8 +69,8 @@ class Settings:
         for k, v in data.items():
             if k not in names:
                 raise ValueError("알 수 없는 설정 키: %s" % k)
-            if k == "i2_factor":
-                merged = dict(s.i2_factor)
+            if k in ("i2_factor", "meta_keys"):
+                merged = dict(getattr(s, k))
                 merged.update(v)
                 v = merged
             setattr(s, k, v)

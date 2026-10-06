@@ -4,8 +4,10 @@
 """
 from __future__ import annotations
 
+import json
 import math
 import re
+import zlib
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -86,6 +88,10 @@ class Drawing:
     audit_errors: List[str] = field(default_factory=list)
     audit_fixes: int = 0
     load_error: str = ""
+    # 설계 메타데이터 (XRECORD 안의 JSON) — SolarAutoDesign 설계 조건
+    metadata: Dict[str, object] = field(default_factory=dict)
+    nonuniform_inserts: List[Tuple[str, float, float, str]] = field(default_factory=list)  # (블록, sx, sy, handle)
+    paper_layouts: List[Tuple[str, float, float]] = field(default_factory=list)  # (배치, 용지 폭, 높이 mm)
 
     @property
     def total_entities(self) -> int:
@@ -154,6 +160,17 @@ def load(path: Path, settings: Settings) -> Drawing:
             pass
     for obj in doc.objects.query("IMAGEDEF"):
         d.images.append(obj.dxf.get("filename", ""))
+
+    d.metadata = read_metadata(doc)
+    for name in doc.layouts.names_in_taborder():
+        lay = doc.layouts.get(name)
+        if lay.is_modelspace:
+            continue
+        try:
+            dl = lay.dxf_layout.dxf
+            d.paper_layouts.append((name, float(dl.get("paper_width", 0) or 0), float(dl.get("paper_height", 0) or 0)))
+        except Exception:  # noqa: BLE001
+            pass
 
     line_keys: Dict[tuple, str] = {}
     for layout_name in doc.layouts.names_in_taborder():
@@ -246,6 +263,10 @@ def _visit(d: Drawing, e, layout: str, line_keys: Dict[tuple, str], settings: Se
 def _visit_insert(d: Drawing, ins, layout: str, depth: int, settings: Settings) -> None:
     name = ins.dxf.get("name", "")
     d.blocks_used[name] += 1
+    if depth == 0:
+        sx, sy = abs(float(ins.dxf.get("xscale", 1) or 1)), abs(float(ins.dxf.get("yscale", 1) or 1))
+        if abs(sx - sy) > 0.01 * max(sx, sy, 1e-9):
+            d.nonuniform_inserts.append((name, sx, sy, ins.dxf.get("handle", "")))
     attrs: Dict[str, str] = {}
     for a in getattr(ins, "attribs", []):
         try:
@@ -267,6 +288,61 @@ def _visit_insert(d: Drawing, ins, layout: str, depth: int, settings: Settings) 
             _add_text(d, v, layout, block=name, layer_override=_layer(ins))
         elif vt == "INSERT":
             _visit_insert(d, v, layout, depth + 1, settings)
+
+
+# ── 설계 메타데이터 ─────────────────────────────────────────────────────
+# [미검증 · 실제 SolarAutoDesign XRECORD 형식 확인 예정]
+# XRECORD 의 문자열 태그(1·300·1000 등)를 이어 붙인 JSON, 또는 이진 태그(310)를 이어 붙인
+# JSON / zlib 압축 JSON 을 읽는다. 중첩 키는 'a.b'와 말단 키 'b' 둘 다로 펼친다.
+def _flatten(obj, prefix: str, out: Dict[str, object]) -> None:
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            _flatten(v, "%s.%s" % (prefix, k) if prefix else str(k), out)
+        return
+    out[prefix] = obj
+    leaf = prefix.rsplit(".", 1)[-1]
+    out.setdefault(leaf, obj)
+
+
+def _parse_blob(text: str) -> Optional[dict]:
+    text = text.strip().lstrip("\ufeff")
+    if not text.startswith("{"):
+        return None
+    try:
+        v = json.loads(text)
+    except ValueError:
+        return None
+    return v if isinstance(v, dict) else None
+
+
+def read_metadata(doc) -> Dict[str, object]:
+    out: Dict[str, object] = {}
+    try:
+        xrecords = list(doc.objects.query("XRECORD"))
+    except Exception:  # noqa: BLE001
+        return out
+    for xr in xrecords:
+        strings, blobs = [], []
+        for tag in getattr(xr, "tags", []):
+            v = tag.value
+            if isinstance(v, (bytes, bytearray)):
+                blobs.append(bytes(v))
+            elif isinstance(v, str):
+                strings.append(v)
+        cands = ["".join(strings)] if strings else []
+        if blobs:
+            raw = b"".join(blobs)
+            for data in (raw, None):
+                try:
+                    data = zlib.decompress(raw) if data is None else data
+                    cands.append(data.decode("utf-8"))
+                except Exception:  # noqa: BLE001
+                    continue
+        for c in cands:
+            obj = _parse_blob(c)
+            if obj:
+                _flatten(obj, "", out)
+    return out
 
 
 # ── 문자 높이 · 축척 ───────────────────────────────────────────────────

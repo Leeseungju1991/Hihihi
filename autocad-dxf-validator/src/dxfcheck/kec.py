@@ -60,6 +60,8 @@ CABLE_TYPES: Dict[str, Tuple[str, bool, bool]] = {
     "HIV": ("PVC", True, True),
     "KIV": ("PVC", True, True),
     "IV": ("PVC", True, True),
+    "H1Z2Z2-K": ("XLPE", False, True),   # 태양광 DC 전용 (KS C IEC 62930, DC 1.5kV)
+    "PV": ("XLPE", False, True),
     "CNCV-W": ("XLPE", False, False),
     "CNCV": ("XLPE", False, False),
     "FR-CNCO-W": ("XLPE", False, False),

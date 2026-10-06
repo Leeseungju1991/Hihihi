@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import List
 
-from .model import Category, FileReport, Finding, Report, Severity
+from .model import Category, FileReport, Finding, PackageReport, Report, Severity
 
 _ICON = {Severity.ERROR: "🔴", Severity.WARNING: "🟡", Severity.INFO: "🔵"}
 _VERDICT_ICON = {"적합": "✅", "조건부 적합": "⚠️", "부적합": "❌", "검증 불가": "⛔"}
@@ -27,6 +27,8 @@ def _finding_md(f: Finding) -> List[str]:
     if f.location:
         l = f.location
         pos = []
+        if l.get("drawing"):
+            pos.append("도면 %s" % l["drawing"])
         if l.get("layout") and l.get("layout") != "Model":
             pos.append("배치 %s" % l["layout"])
         if l.get("layer"):
@@ -75,6 +77,35 @@ def _file_md(fr: FileReport, idx: int) -> List[str]:
     return out
 
 
+def _package_md(p: PackageReport) -> List[str]:
+    out = ["", "## 도면 세트 정합성 — %s" % p.name, "",
+           "부적합 %d · 주의 %d · 참고 %d" % (p.count(Severity.ERROR), p.count(Severity.WARNING), p.count(Severity.INFO))]
+    if p.profile:
+        out += ["", "- 학습 기준: " + " · ".join("%s %s" % kv for kv in p.profile.items())]
+    if p.sheets:
+        out += ["", "### 도면 인식", "", "| 도면번호 | 파일 | 표제란 도면명 | 정본 도면명 | 인식 근거 |", "|---|---|---|---|---|"]
+        out += ["| %s | %s | %s | %s | %s |" % tuple(_esc(r[k]) for k in ("도면번호", "파일", "표제란 도면명", "정본 도면명", "인식 근거"))
+                for r in p.sheets]
+    if p.facts:
+        cols = sorted({k for row in p.facts.values() for k in row if k != "설계값"})
+        has_meta = any("설계값" in row for row in p.facts.values())
+        if has_meta:
+            cols = ["설계값"] + cols
+        out += ["", "### 도면 간 설계 수치 대조", "", "| 항목 | " + " | ".join(cols) + " |",
+                "|---|" + "---|" * len(cols)]
+        for fact, row in p.facts.items():
+            vals = [row.get(c, "") for c in cols]
+            distinct = {v for c, v in row.items() if v}
+            mark = " ⚠" if len(distinct) > 1 else ""
+            out.append("| %s%s | %s |" % (fact, mark, " | ".join(_esc(v) for v in vals)))
+    out += ["", "### 세트 지적 사항", ""]
+    if not p.findings:
+        out.append("지적 사항 없음.")
+    for f in p.findings:
+        out += _finding_md(f)
+    return out
+
+
 def to_markdown(report: Report) -> str:
     v = report.verdict
     out = ["# DXF 도면 검증 보고서 (KEC 기준)", "",
@@ -95,6 +126,8 @@ def to_markdown(report: Report) -> str:
         out += ["", "## 압축·입력 점검", ""]
         for f in report.archive_findings:
             out += _finding_md(f)
+    for p in report.packages:
+        out += _package_md(p)
     for i, fr in enumerate(report.files, 1):
         out += _file_md(fr, i)
     s = report.settings
@@ -105,6 +138,9 @@ def to_markdown(report: Report) -> str:
             "- 적용 조건: 케이블 공사방법 %s, 절연전선 %s, 보정계수 %.2f, 전압강하 %s형, 역률 %.2f "
             "(`--config`로 변경)." % (s.get("cable_method"), s.get("wire_method"), s.get("derating", 1.0),
                                     s.get("supply_type"), s.get("power_factor", 0.9)),
+            "- 도면 세트는 'AutoCAD 자동화 설계' 6장의 E-01~E-21 검증 항목을 따릅니다. 기준값은 XRECORD 설계 메타데이터, "
+            "없으면 도면 간 다수값입니다.",
+            "- 학습 기준 비교는 승인된 기준 도면의 통계 프로파일(레이어·글꼴·블록·표제란·표준 문구·수치 항목)과의 차이입니다.",
             "- 도면 '문자' 표기를 읽어 판정합니다. 선(형상)만 그려진 결선, 블록 밖 기호, 표기 오기는 판정할 수 없습니다.",
             "- 차단기↔전선 연관은 같은 문자 → 같은 행 → 근접 순으로 추정하며, 근접 추정 결과는 '주의'로 낮춰 표시합니다.",
             "- 이 보고서는 설계 검토 보조 자료입니다. 최종 적합 판단은 전기 설계·감리 기술자가 합니다."]

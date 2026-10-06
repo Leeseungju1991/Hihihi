@@ -21,6 +21,8 @@ class Category(str, Enum):
     CAD = "CAD 품질"
     DOC = "도면 표기"
     KEC = "KEC 전기"
+    SET = "도면 세트 정합성"
+    PROFILE = "학습 기준 비교"
 
 
 @dataclass
@@ -96,10 +98,30 @@ class FileReport:
 
 
 @dataclass
+class PackageReport:
+    """도면 세트(한 입력 ZIP/폴더) 검증 결과."""
+
+    name: str
+    sheets: List[Dict[str, Any]] = field(default_factory=list)       # 도면번호·파일·도면명·근거
+    facts: Dict[str, Dict[str, str]] = field(default_factory=dict)   # 사실 → {도면번호: 값}
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    findings: List[Finding] = field(default_factory=list)
+    profile: Dict[str, Any] = field(default_factory=dict)
+
+    def count(self, sev: Severity) -> int:
+        return sum(1 for f in self.findings if f.severity == sev)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"name": self.name, "sheets": self.sheets, "facts": self.facts, "metadata": self.metadata,
+                "profile": self.profile, "findings": [f.to_dict() for f in self.findings]}
+
+
+@dataclass
 class Report:
     inputs: List[str]
     files: List[FileReport] = field(default_factory=list)
     archive_findings: List[Finding] = field(default_factory=list)
+    packages: List[PackageReport] = field(default_factory=list)
     generated_at: str = ""
     settings: Dict[str, Any] = field(default_factory=dict)
 
@@ -108,9 +130,9 @@ class Report:
         return [f for f in self.files if f.kind == "dxf"]
 
     def total(self, sev: Severity) -> int:
-        return sum(f.count(sev) for f in self.files) + sum(
-            1 for f in self.archive_findings if f.severity == sev
-        )
+        return (sum(f.count(sev) for f in self.files)
+                + sum(1 for f in self.archive_findings if f.severity == sev)
+                + sum(p.count(sev) for p in self.packages))
 
     @property
     def verdict(self) -> str:
@@ -118,6 +140,10 @@ class Report:
         if not dxf:
             return "검증 불가"
         verdicts = {f.verdict for f in dxf}
+        if any(p.count(Severity.ERROR) for p in self.packages):
+            verdicts.add("부적합")
+        elif any(p.count(Severity.WARNING) for p in self.packages):
+            verdicts.add("조건부 적합")
         for v in ("부적합", "검증 불가", "조건부 적합"):
             if v in verdicts:
                 return v
@@ -130,6 +156,7 @@ class Report:
             "verdict": self.verdict,
             "counts": {s.value: self.total(s) for s in Severity},
             "archive_findings": [f.to_dict() for f in self.archive_findings],
+            "packages": [p.to_dict() for p in self.packages],
             "files": [f.to_dict() for f in self.files],
             "settings": self.settings,
         }
