@@ -53,3 +53,6 @@ npm run e2e                                      # Playwright: ①~⑤ 전 흐�
 - 애니메이션은 절제한다: 페이지 전환 160ms, 카드 hover, 진행중 점 정도. `prefers-reduced-motion`을 지킨다.
 - 화면에 이메일 전체를 표시하지 않는다. 처리자는 `who()`로 계정명만 표시한다(원본은 이력에 저장).
 - 새 규칙을 추가하면 `fixtures.py`에 시나리오를 추가하고 `tests/test_engine.py`에 기대 분류를 적는다.
+
+## DXF 도면 검증기 (`autocad-dxf-validator/`)
+정산 오케스트레이터와 별개 프로젝트다. 사용자가 DXF 도면 ZIP을 첨부하면 `autocad-dxf-validator/CLAUDE.md` 절차대로 `dxfcheck`을 돌려 KEC 기준 검증 결과를 보고한다.

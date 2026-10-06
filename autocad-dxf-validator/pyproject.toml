@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dxfcheck"
+version = "0.1.0"
+description = "AutoCAD DXF 도면 검증기 — CAD 품질 · 도면 표기 · KEC(한국전기설비규정) 전기 규정 검토"
+requires-python = ">=3.9"
+dependencies = ["ezdxf>=1.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+dxfcheck = "dxfcheck.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
